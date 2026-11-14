@@ -2,41 +2,18 @@ import AppKit
 import ServiceManagement
 import UniformTypeIdentifiers
 
-enum CaptureMode: String {
-    case area, screen
-}
-
 /// メニューバーに常駐し、Finder からのファイルとスクリーンショットをウインドウに振り分ける。
 /// ウインドウがない間は Dock から消え、メニューバーのアイコンだけが残る。
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private(set) var windows: [ReviewWindow] = []
     private let files = AppSchemeHandler(root: Bundle.main.resourceURL!.appendingPathComponent("web"))
     private let defaults = UserDefaults.standard
-    private let hotKey = HotKey()
+    private let shortcuts = ShortcutCenter.shared
+    private(set) lazy var settings = SettingsWindowController()
     private(set) var statusItem: NSStatusItem!
     private var cascade = NSPoint.zero
     private var capturing = false
     private var openedAtLaunch = false
-
-    // MARK: 設定
-
-    private var shortcut: Shortcut {
-        get {
-            guard let label = defaults.string(forKey: "shortcutLabel") else { return .standard }
-            return Shortcut(keyCode: UInt32(defaults.integer(forKey: "shortcutKeyCode")),
-                            modifiers: UInt32(defaults.integer(forKey: "shortcutModifiers")), label: label)
-        }
-        set {
-            defaults.set(Int(newValue.keyCode), forKey: "shortcutKeyCode")
-            defaults.set(Int(newValue.modifiers), forKey: "shortcutModifiers")
-            defaults.set(newValue.label, forKey: "shortcutLabel")
-        }
-    }
-
-    private var shortcutMode: CaptureMode {
-        get { CaptureMode(rawValue: defaults.string(forKey: "shortcutMode") ?? "") ?? .area }
-        set { defaults.set(newValue.rawValue, forKey: "shortcutMode") }
-    }
 
     // MARK: 起動と終了
 
@@ -48,11 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = NSMenu()
         statusItem.menu?.delegate = self
 
-        HotKey.action = { [weak self] in
-            guard let self else { return }
-            self.capture(self.shortcutMode)
-        }
-        hotKey.register(shortcut)
+        shortcuts.onPress = { [weak self] in self?.capture($0) }
+        shortcuts.registerAll()
 
         // ログイン時の自動起動ではウインドウを出さず、裏で待機する。
         let launch = NSAppleEventManager.shared().currentAppleEvent
@@ -159,11 +133,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: スクリーンショット
 
-    @objc func captureArea(_ sender: Any?) { capture(.area) }
-
-    @objc func captureScreen(_ sender: Any?) {
+    @objc func captureFromMenu(_ sender: NSMenuItem) {
+        guard let mode = sender.representedObject as? CaptureMode else { return }
         // メニューが消えきってから撮る。
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.capture(.screen) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.capture(mode) }
     }
 
     func capture(_ mode: CaptureMode) {
@@ -179,14 +152,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         switch mode {
-        case .area:
-            // 標準の ⌘⇧4 と同じ操作。ドラッグで範囲、スペースでウインドウ単位、esc で取り消し。
-            process.arguments = ["-i", file.path]
         case .screen:
             // ポインターのある画面を撮る。
             let pointer = NSEvent.mouseLocation
             let index = NSScreen.screens.firstIndex { $0.frame.contains(pointer) } ?? 0
             process.arguments = ["-D", String(index + 1), file.path]
+        case .area:
+            // 標準の ⌘⇧4 と同じ操作。ドラッグで範囲を選び、esc で取り消す。
+            process.arguments = ["-i", file.path]
+        case .window:
+            // ウインドウ選択の状態で始める。クリックしたウインドウを撮る。
+            process.arguments = ["-i", "-W", file.path]
         }
         process.terminationHandler = { _ in
             DispatchQueue.main.async {
@@ -224,37 +200,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: ショートカットとログイン項目
 
-    @objc func useAreaForShortcut(_ sender: Any?) { shortcutMode = .area }
-    @objc func useScreenForShortcut(_ sender: Any?) { shortcutMode = .screen }
-
-    @objc func changeShortcut(_ sender: Any?) {
-        let current = shortcut
-        let recorder = ShortcutRecorderView(current: current.label)
-        let alert = NSAlert()
-        alert.messageText = "新しいショートカットを押してください"
-        alert.informativeText = "⌘ / ⌃ / ⌥ のいずれかを含む組み合わせにしてください。"
-        alert.accessoryView = recorder
-        alert.addButton(withTitle: "設定")
-        alert.addButton(withTitle: "キャンセル")
-        alert.window.initialFirstResponder = recorder
-
-        hotKey.unregister()   // 記録中に今のショートカットが発動しないようにする
-        NSApp.activate(ignoringOtherApps: true)
-        let chosen = alert.runModal() == .alertFirstButtonReturn ? recorder.shortcut : nil
-        guard let chosen, chosen != current else {
-            hotKey.register(current)
-            return
-        }
-        if hotKey.register(chosen) {
-            shortcut = chosen
-        } else {
-            hotKey.register(current)
-            let failure = NSAlert()
-            failure.alertStyle = .warning
-            failure.messageText = "\(chosen.label) は使えませんでした"
-            failure.informativeText = "ほかのアプリやシステムが使っている可能性があります。別の組み合わせを選んでください。"
-            failure.runModal()
-        }
+    @objc func showSettings(_ sender: Any?) {
+        settings.show()
     }
 
     @objc func toggleLaunchAtLogin(_ sender: Any?) {
@@ -289,21 +236,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
-        let mode = shortcutMode
-        menu.items = [
-            item("範囲を選んで撮影", #selector(captureArea)),
-            item("画面全体を撮影", #selector(captureScreen)),
+        let captures = CaptureMode.allCases.map { mode in
+            let entry = item(mode.title, #selector(captureFromMenu))
+            entry.representedObject = mode
+            // いま実際に効いているショートカットだけを右側に表示する。
+            if shortcuts.isActive(mode) {
+                let shortcut = shortcuts.shortcut(for: mode)
+                entry.keyEquivalent = shortcut.menuKey
+                entry.keyEquivalentModifierMask = shortcut.menuModifiers
+            }
+            return entry
+        }
+        menu.items = captures + [
             .separator(),
             item("新規ウインドウ", #selector(newDocument)),
             item("画像・PDFを開く…", #selector(openDocument)),
             .separator(),
-            // ほかのアプリと重なって登録できなかったときは、黙って効かないままにしない。
-            submenu("ショートカット（\(shortcut.label)\(hotKey.isRegistered ? "" : "・ほかで使用中")）", [
-                item("範囲を選んで撮影", #selector(useAreaForShortcut), checked: mode == .area),
-                item("画面全体を撮影", #selector(useScreenForShortcut), checked: mode == .screen),
-                .separator(),
-                item("キーを変更…", #selector(changeShortcut)),
-            ]),
+            item("ショートカット設定…", #selector(showSettings)),
             item("ログイン時に起動", #selector(toggleLaunchAtLogin), checked: SMAppService.mainApp.status == .enabled),
             .separator(),
             item("ImageReviewを終了", #selector(NSApplication.terminate)),
@@ -320,6 +269,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         main.items = [
             submenu("ImageReview", [
                 item("ImageReviewについて", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+                .separator(),
+                item("ショートカット設定…", #selector(showSettings), key: ","),
                 .separator(),
                 item("ImageReviewを隠す", #selector(NSApplication.hide), key: "h"),
                 hideOthers,

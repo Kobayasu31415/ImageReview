@@ -13,10 +13,67 @@ extension AppDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             Task { @MainActor in
                 var log = "windows=\(self.windows.count) policy=\(NSApp.activationPolicy().rawValue)\n"
-                if let menu = self.statusItem.menu {
+                let center = ShortcutCenter.shared
+                @MainActor func menuLog() -> String {
+                    guard let menu = self.statusItem.menu else { return "" }
                     self.menuNeedsUpdate(menu)
-                    let titles = menu.items.map { ($0.state == .on ? "✓" : "") + $0.title + ($0.submenu.map { "[" + $0.items.map { ($0.state == .on ? "✓" : "") + $0.title }.joined(separator: ",") + "]" } ?? "") }
-                    log += "menu=\(titles.joined(separator: " / "))\n"
+                    let mods = { (m: NSEvent.ModifierFlags) in (m.contains(.control) ? "⌃" : "") + (m.contains(.option) ? "⌥" : "") + (m.contains(.shift) ? "⇧" : "") + (m.contains(.command) ? "⌘" : "") }
+                    return "menu=" + menu.items.map { ($0.state == .on ? "✓" : "") + $0.title + ($0.keyEquivalent.isEmpty ? "" : " <\(mods($0.keyEquivalentModifierMask))\($0.keyEquivalent)>") }.joined(separator: " / ") + "\n"
+                }
+                @MainActor func states() -> String {
+                    CaptureMode.allCases.map { "\($0.rawValue)=\(center.shortcut(for: $0).label) on=\(center.isEnabled($0)) active=\(center.isActive($0))" }.joined(separator: ", ") + "\n"
+                }
+                @MainActor func recorders(_ view: NSView) -> [ShortcutRecorder] {
+                    (view as? ShortcutRecorder).map { [$0] } ?? view.subviews.flatMap(recorders)
+                }
+                @MainActor func snapshot(_ name: String) {
+                    guard let view = self.settings.window.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+                    // ウインドウの地色は写らないので、同じ外観の背景色を先に塗る。
+                    NSGraphicsContext.saveGraphicsState()
+                    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+                    view.effectiveAppearance.performAsCurrentDrawingAppearance {
+                        NSColor.windowBackgroundColor.setFill()
+                        NSRect(origin: .zero, size: view.bounds.size).fill()
+                    }
+                    NSGraphicsContext.restoreGraphicsState()
+                    view.cacheDisplay(in: view.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name))
+                }
+                @MainActor func press(_ recorder: ShortcutRecorder, _ flags: NSEvent.ModifierFlags, _ chars: String, _ code: Int) -> Bool {
+                    let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: self.settings.window.windowNumber, context: nil, characters: chars, charactersIgnoringModifiers: chars, isARepeat: false, keyCode: UInt16(code))!
+                    return recorder.performKeyEquivalent(with: event)
+                }
+                log += menuLog()
+                if env["IRN_TEST_SETTINGS"] != nil {
+                    center.resetAll()
+                    log += "defaults: " + states()
+                    self.settings.show()
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    let fields = recorders(self.settings.window.contentView!)
+                    log += "recorders=\(fields.count) titles=\(fields.map(\.title))\n"
+                    snapshot("settings-1.png")
+                    // 2行目（範囲）を記録状態にして、1行目と同じ ⇧⌘7 を押す → 重複で拒否されるはず
+                    fields[1].performClick(nil)
+                    log += "recording=\(fields[1].isRecording) title=\(fields[1].title) while recording: " + states()
+                    snapshot("settings-2.png")
+                    log += "plain key handled=\(press(fields[1], [], "a", 0)) stillRecording=\(fields[1].isRecording)\n"
+                    log += "dup handled=\(press(fields[1], [.command, .shift], "7", 26)) " + states()
+                    snapshot("settings-3.png")
+                    // 3行目（ウインドウ）を ⌃⌥⌘W に変更 → 通るはず
+                    fields[2].performClick(nil)
+                    log += "change handled=\(press(fields[2], [.control, .option, .command], "w", 13)) " + states()
+                    // esc で取り消し
+                    fields[0].performClick(nil)
+                    log += "esc handled=\(press(fields[0], [], "\u{1B}", 53)) recording=\(fields[0].isRecording) " + states()
+                    // 1行目（全画面）をオフ
+                    center.setEnabled(false, for: .screen)
+                    self.settings.show()
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    log += "screen off: " + states()
+                    snapshot("settings-4.png")
+                    log += menuLog()
+                    center.resetAll()
+                    log += "reset: " + states()
                 }
                 if env["IRN_TEST_CLOSE"] != nil {
                     self.windows.forEach { $0.window.performClose(nil) }
