@@ -7,7 +7,6 @@ import UniformTypeIdentifiers
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private(set) var windows: [ReviewWindow] = []
     private let files = AppSchemeHandler(root: Bundle.main.resourceURL!.appendingPathComponent("web"))
-    private let defaults = UserDefaults.standard
     private let shortcuts = ShortcutCenter.shared
     private(set) lazy var settings = SettingsWindowController()
     private(set) var statusItem: NSStatusItem!
@@ -27,6 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         shortcuts.onPress = { [weak self] in self?.capture($0) }
         shortcuts.registerAll()
+        // 作り直したあとも許可が残っているかを後から確かめられるよう、起動時の状態を残す。
+        Log.write("launch accessibility=\(Paster.isAllowed) screenCapture=\(CGPreflightScreenCaptureAccess())")
 
         // ログイン時の自動起動ではウインドウを出さず、裏で待機する。
         let launch = NSAppleEventManager.shared().currentAppleEvent
@@ -181,19 +182,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func requestScreenCaptureAccess() {
-        // 初回は macOS の許可ダイアログが出る。2回目以降は出ないので自前で案内する。
-        if !defaults.bool(forKey: "askedScreenCapture") {
-            defaults.set(true, forKey: "askedScreenCapture")
-            if CGRequestScreenCaptureAccess() { return }
+        // 初めてのときは macOS の確認が出て、そこから設定画面へ進める。こちらの案内は重ねない
+        // （重ねると、設定で許可したあとに macOS の確認だけが画面に取り残される）。
+        let key = "requestedScreenCapture"
+        if !UserDefaults.standard.bool(forKey: key) {
+            UserDefaults.standard.set(true, forKey: key)
+            CGRequestScreenCaptureAccess()
+            return
         }
         let alert = NSAlert()
         alert.messageText = "画面収録の許可が必要です"
-        alert.informativeText = "システム設定の「プライバシーとセキュリティ › 画面収録とシステムオーディオ録音」で「ImageReview」をオンにしてから、このアプリを起動し直してください。"
+        alert.informativeText = """
+            システム設定の「プライバシーとセキュリティ › 画面収録とシステムオーディオ録音」で「ImageReview」をオンにしてから、このアプリを起動し直してください。
+
+            すでにオンなのにこの表示が出るときは、以前のバージョンに出した許可が残っています。一覧の ImageReview を「−」で削除してから、もう一度オンにしてください。
+            """
         alert.addButton(withTitle: "システム設定を開く")
         alert.addButton(withTitle: "キャンセル")
         NSApp.activate(ignoringOtherApps: true)
-        if alert.runModal() == .alertFirstButtonReturn,
-           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        // 一覧に載っていなければ、ここで macOS が登録する（初回は macOS の確認も出る）。
+        // 一覧から削除したあとに載せ直せるよう、毎回呼ぶ。
+        CGRequestScreenCaptureAccess()
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
             NSWorkspace.shared.open(url)
         }
     }
@@ -202,6 +213,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func showSettings(_ sender: Any?) {
         settings.show()
+    }
+
+    @objc func allowAutoPaste(_ sender: Any?) {
+        Paster.requestPermission()
     }
 
     @objc func toggleLaunchAtLogin(_ sender: Any?) {
@@ -254,6 +269,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .separator(),
             item("ショートカット設定…", #selector(showSettings)),
             item("ログイン時に起動", #selector(toggleLaunchAtLogin), checked: SMAppService.mainApp.status == .enabled),
+        ] + (Paster.isAllowed ? [] : [
+            // 「AIに送る」で貼り付けまで自動にするための許可。まだのときだけ出す。
+            item("AIへの自動貼り付けを許可…", #selector(allowAutoPaste)),
+        ]) + [
             .separator(),
             item("ImageReviewを終了", #selector(NSApplication.terminate)),
         ]

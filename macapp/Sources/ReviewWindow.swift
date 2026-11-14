@@ -22,8 +22,9 @@ final class ReviewWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WKUI
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(files, forURLScheme: AppSchemeHandler.scheme)
         // WKWebView では window.print() が何もしないので、ネイティブの印刷に差し替える。
+        // あわせて、この Mac で使える AI の送り先を編集画面に知らせる。
         config.userContentController.addUserScript(WKUserScript(
-            source: "window.print=()=>webkit.messageHandlers.native.postMessage('print')",
+            source: "window.print=()=>webkit.messageHandlers.native.postMessage('print');" + AIDestination.catalogScript,
             injectionTime: .atDocumentStart, forMainFrameOnly: true))
         webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 860), configuration: config)
         window = NSWindow(contentRect: webView.frame, styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -128,7 +129,19 @@ final class ReviewWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WKUI
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        if message.body as? String == "print" { printDocument() }
+        if message.body as? String == "print" { return printDocument() }
+        // 「AIに送る」: 編集画面が作った注釈入りの画像（PNG の data URL）と指示文を受け取る。
+        guard let body = message.body as? [String: Any], body["type"] as? String == "send",
+              let destination = AIDestination(rawValue: body["target"] as? String ?? ""),
+              let image = Self.decode(body["image"]) else { return }
+        destination.send(image: image, imageWithNotes: Self.decode(body["imageWithNotes"]),
+                         fresh: body["fresh"] as? Bool ?? true, prompt: body["prompt"] as? String ?? "")
+    }
+
+    /// data URL（data:image/png;base64,…）の中身を取り出す。
+    private static func decode(_ dataURL: Any?) -> Data? {
+        guard let text = dataURL as? String, let comma = text.firstIndex(of: ",") else { return nil }
+        return Data(base64Encoded: String(text[text.index(after: comma)...]))
     }
 
     // MARK: ノート保存（ページ側の a[download] をネイティブの保存ダイアログへ）

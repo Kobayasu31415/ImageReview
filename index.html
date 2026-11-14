@@ -11,7 +11,7 @@
  --shadow:0 1px 2px rgba(20,40,34,.05),0 8px 20px -14px rgba(20,40,34,.4);
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 "Yu Gothic UI","Hiragino Sans","Noto Sans JP",Meiryo,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+body{margin:0;display:flex;flex-direction:column;min-height:100vh;background:var(--bg);color:var(--ink);font:15px/1.65 "Yu Gothic UI","Hiragino Sans","Noto Sans JP",Meiryo,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 h1,h2,p{margin:0}
 button,select,input,textarea{font:inherit;color:inherit}
 button,select{background:var(--surface);border:1px solid var(--line-strong);color:var(--ink);padding:7px 13px;border-radius:var(--r-sm);cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s}
@@ -45,7 +45,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 #status:empty{display:none}
 
 /* ---- canvas ---- */
-main{display:grid;grid-template-columns:minmax(0,1fr) 340px;align-items:start;min-height:65vh}
+main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 340px;align-items:start;min-height:65vh}
 section{min-width:0;padding:22px 24px}
 #viewport{overflow:auto;max-height:74vh;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r);box-shadow:inset 0 1px 4px rgba(20,40,34,.08)}
 #viewport::-webkit-scrollbar{width:12px;height:12px}
@@ -85,15 +85,21 @@ textarea::placeholder{color:#a9b5ae}
 .references figure button{display:block;width:100%;margin-top:5px;padding:4px;font-size:11px;color:var(--ink-soft);background:transparent;border:0;border-top:1px solid var(--line);border-radius:0}
 .references figure button:hover{color:var(--danger);background:#fdf4f4}
 
+/* ---- send to AI ---- */
+footer{position:sticky;bottom:0;display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap;padding:10px 24px;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -8px 20px -16px rgba(20,40,34,.5)}
+#sendHint{margin-right:auto;font-size:13px;color:var(--ink-soft)}
+#send{padding:8px 22px;background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+#send:hover:not(:disabled){background:#27634f;border-color:#27634f;color:#fff}
+
 .printText,#printTitle{display:none}
 [hidden]{display:none!important}
-@media(max-width:860px){main{grid-template-columns:1fr}aside{border-left:0;border-top:1px solid var(--line)}header,nav,section,aside{padding-left:16px;padding-right:16px}}
+@media(max-width:860px){main{grid-template-columns:1fr}aside{border-left:0;border-top:1px solid var(--line)}header,nav,section,aside,footer{padding-left:16px;padding-right:16px}}
 
 /* ---- print ---- */
 @page{size:A4 landscape;margin:10mm}
 @media print{
- body{background:#fff;color:#000;font-size:10pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
- header,nav,#help,#empty,#hint,textarea,.note button{display:none!important}
+ body{display:block;background:#fff;color:#000;font-size:10pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ header,nav,footer,#help,#empty,#hint,textarea,.note button{display:none!important}
  main,section,aside,#viewport,.note{display:block;padding:0;margin:0;border:0;background:#fff;overflow:visible;max-height:none;box-shadow:none;border-radius:0}
  #printTitle{display:block;margin-bottom:3mm;padding-bottom:2mm;font-size:14pt;font-weight:600;border-bottom:.4pt solid #999;overflow-wrap:anywhere}
  #board{width:100%!important;height:112mm!important;max-width:100%}
@@ -111,12 +117,15 @@ textarea::placeholder{color:#a9b5ae}
  .note:has(figure){break-inside:auto}
 }
 #pdfPicker{border:1px solid #bccbc5;border-radius:12px;max-width:min(90vw,550px);color:inherit}#pdfPicker::backdrop{background:#16352c66}#pdfName{overflow-wrap:anywhere}#pagePreview{margin:10px 0;display:grid;place-items:center;background:#ebeee9;min-height:8em}#pagePreview canvas{max-width:100%;max-height:42vh}#pdfPicker form{display:flex;gap:8px;align-items:center;flex-wrap:wrap}#pageNumber{width:5em}
+.sheet{width:min(90vw,460px);padding:20px 22px;border:1px solid #bccbc5;border-radius:12px;color:inherit}.sheet::backdrop{background:#16352c66}.sheet label{display:flex;align-items:center;gap:10px;margin:11px 0;font-size:14px;color:var(--ink-mid)}.sheet label span{flex:0 0 4.5em}.sheet select{flex:1;min-width:0}.sheet p{margin-top:12px;font-size:13px;line-height:1.7;color:var(--ink-soft)}.sheet menu{display:flex;flex-direction:row-reverse;justify-content:flex-start;gap:8px;margin:18px 0 0;padding:0}.sheet .go{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}.sheet .go:hover{background:#27634f;border-color:#27634f;color:#fff}
 </style>
-<header><h1><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l5 5L20 6"/></svg></span>ImageReview</h1><div class="actions"><button id="open">画像・PDFを開く</button><button id="restore">ノートを開く</button><button id="save" disabled>ノート保存</button><button id="pdf" disabled>印刷 / PDF保存</button></div></header>
+<header><h1><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l5 5L20 6"/></svg></span>ImageReview</h1><div class="actions"><button id="open">画像・PDFを開く</button><button id="restore">ノートを開く</button><button id="save" disabled>ノート保存</button><button id="export" disabled>画像を書き出す</button><button id="pdf" disabled>印刷 / PDF保存</button></div></header>
 <input hidden id="file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,application/pdf,.pdf"><input hidden id="project" type="file" accept=".json">
 <nav><div class="seg" role="group" aria-label="描画ツール"><button id="tag" aria-pressed="true">番号タグ</button><button id="brush" aria-pressed="false">ブラシ</button></div><label>色<input type="color" id="ink" value="#c93235"></label><label>太さ<select id="width"><option value="2">細</option><option selected value="4">中</option><option value="8">太</option></select></label><button id="undo" disabled>元に戻す</button><label>表示<select id="zoom"><option value="1">全幅</option><option value="1.5">150%</option><option value="2">200%</option><option value="3">300%</option></select></label><span id="status" role="status"></span></nav>
 <main><section><h2 id="printTitle"></h2><div id="viewport"><div id="empty"><svg class="icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="9" width="36" height="30" rx="4"/><circle cx="17" cy="20" r="3.5"/><path d="M8 33l10-9 7 6 6-5 9 8"/></svg><p class="lead">修正したい画像・PDFをここにドロップ</p><p class="sub">または「画像・PDFを開く」から選んでください（PNG / JPEG / WebP / GIF / BMP / PDF）</p></div><svg id="board" hidden xmlns="http://www.w3.org/2000/svg" aria-label="修正箇所を指定する画像"></svg></div><p id="help"></p></section><aside><h2>修正指示</h2><p id="hint">画像をクリックして、指示を書く場所を指定します。</p><div id="notes"></div></aside></main>
+<footer id="sendbar" hidden><span id="sendHint"></span><div class="seg" id="sendTarget" role="group" aria-label="送り先"></div><div class="seg" id="sendMode" role="group" aria-label="送り方"><button data-value="new">新規チャット</button><button data-value="recent">直近のチャット</button></div><button id="send" disabled>AIに送る</button></footer>
 <dialog id="pdfPicker"><h2>読み込むページを選択</h2><p id="pdfName"></p><div id="pagePreview"></div><form method="dialog"><label>ページ <input id="pageNumber" type="number" min="1" step="1" required><span id="pageCount"></span></label><button value="cancel" formnovalidate>キャンセル</button><button id="usePage" value="use">このページを開く</button></form></dialog>
+<dialog id="exportDialog" class="sheet"><form method="dialog"><h2>画像を書き出す</h2><label><span>サイズ</span><select id="exportSize"><option value="fit">長辺 2000px に縮小（軽い）</option><option value="full">原寸のまま</option></select></label><label><span>形式</span><select id="exportType"><option value="image/jpeg">JPEG（軽い）</option><option value="image/png">PNG（劣化なし）</option></select></label><label><input type="checkbox" id="exportNotes">指示文を画像の下に入れる</label><menu><button class="go" value="export">書き出す</button><button value="cancel">キャンセル</button></menu></form></dialog>
 <script src="vendor/pdfjs-local.js"></script><script src="pdf-import.js"></script>
 <script>
 'use strict';
@@ -183,9 +192,9 @@ function read(f,method){return new Promise((ok,fail)=>{const r=new FileReader();
 function valid(s){const color=c=>/^#[a-f0-9]{6}$/i.test(c);return s&&typeof s.name==='string'&&/^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i.test(s.image)&&Array.isArray(s.notes)&&Array.isArray(s.strokes)&&s.notes.every(n=>Number.isSafeInteger(n.id)&&n.id>0&&Number.isFinite(n.x)&&Number.isFinite(n.y)&&typeof n.text==='string'&&color(n.color)&&(n.references===undefined||Array.isArray(n.references)&&n.references.every(r=>r&&typeof r.name==="string"&&typeof r.src==="string"&&imageData.test(r.src))))&&new Set(s.notes.map(n=>n.id)).size===s.notes.length&&s.strokes.every(s=>color(s.color)&&[2,4,8].includes(s.width)&&Array.isArray(s.points)&&s.points.length&&s.points.every(p=>Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)))}
 async function load(f,isProject){if(!f)return;try{let next;if(isProject){const data=JSON.parse(await f.text());if(data.version!==1||!valid(data.state))throw Error();next=data.state}else{const media=await importMedia(f);if(!media)return;next={name:media.name,image:media.src,notes:[],strokes:[]};if(!valid(next))throw Error()}
  const img=new Image();img.src=next.image;await img.decode();if(dirty&&!confirm('未保存の変更があります。別のファイルを開きますか？'))return;
- state=next;height=1000*img.naturalHeight/img.naturalWidth;history=[];dirty=false;gesture=null;selected=null;$('undo').disabled=true;board.setAttribute('viewBox','0 0 1000 '+height);board.removeAttribute('hidden');$('empty').hidden=true;$('zoom').value='1';$('zoom').onchange();$('pdf').disabled=$('save').disabled=false;$('printTitle').textContent='修正指示　'+state.name;document.title=state.name+' - ImageReview';$('status').textContent=state.name;draw();list()}catch{$('status').textContent='読み込めませんでした。画像、パスワード保護のないPDF、または保存したノートを選んでください。'}}
+ state=next;height=1000*img.naturalHeight/img.naturalWidth;history=[];dirty=false;gesture=null;selected=null;$('undo').disabled=true;board.setAttribute('viewBox','0 0 1000 '+height);board.removeAttribute('hidden');$('empty').hidden=true;$('zoom').value='1';$('zoom').onchange();for(const id of ['pdf','save','export','send'])$(id).disabled=false;$('printTitle').textContent='修正指示　'+state.name;document.title=state.name+' - ImageReview';$('status').textContent=state.name;draw();list()}catch{$('status').textContent='読み込めませんでした。画像、パスワード保護のないPDF、または保存したノートを選んでください。'}}
 for(const [btn,input,project] of [['open','file',false],['restore','project',true]]){$(btn).onclick=()=>$(input).click();$(input).onchange=e=>{load(e.target.files[0],project);e.target.value=''}}
 document.ondragover=e=>e.preventDefault();document.ondrop=e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f)load(f,f.name.toLowerCase().endsWith('.json'))};
 $('save').onclick=()=>{const a=document.createElement('a');const url=URL.createObjectURL(new Blob([JSON.stringify({version:1,state})],{type:'application/json'}));a.href=url;a.download=state.name+'.review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);dirty=false;$('status').textContent='ノートを書き出しました'};
 $('pdf').onclick=()=>window.print();window.onbeforeunload=e=>{if(dirty){e.preventDefault();e.returnValue=''}};
-</script></html>
+</script><script src="export.js"></script></html>

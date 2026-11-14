@@ -13,6 +13,12 @@ extension AppDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             Task { @MainActor in
                 var log = "windows=\(self.windows.count) policy=\(NSApp.activationPolicy().rawValue)\n"
+                var sent = [String]()
+                AIDestination.recordForTesting = { route, png in
+                    sent.append("\(route) png=\(png.count)B")
+                    try? png.write(to: dir.appendingPathComponent("sent-\(sent.count).png"))
+                }
+                defer { _ = sent }
                 let center = ShortcutCenter.shared
                 @MainActor func menuLog() -> String {
                     guard let menu = self.statusItem.menu else { return "" }
@@ -107,6 +113,7 @@ extension AppDelegate {
                     operation.runModal(for: window.window, delegate: nil, didRun: nil, contextInfo: nil)
                     try? await Task.sleep(nanoseconds: 4_000_000_000)
                 }
+                log += sent.map { "sent: \($0)\n" }.joined()
                 try? log.write(to: dir.appendingPathComponent("result.txt"), atomically: true, encoding: .utf8)
                 exit(0)
             }
