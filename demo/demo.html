@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><title>ImageReview demo</title>
+<!--
+  紹介動画の元になるページ。1920×1080 の舞台の上で、本物の編集画面（/index.html を iframe で読み込み）を
+  台本どおりに操作する。時間は実時間ではなくコマ番号で進むので、demo/render がコマごとに
+  window.demo.step(n) を呼んで撮影する（前から順に呼ぶこと）。
+-->
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#16332c}
+body{font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;-webkit-font-smoothing:antialiased;color:#1c2a27}
+#stage{position:relative;width:1920px;height:1080px;overflow:hidden;background:
+ radial-gradient(1200px 800px at 85% 110%,#d9b377 0%,transparent 60%),
+ radial-gradient(1100px 900px at 0% 0%,#4f8472 0%,transparent 65%),
+ linear-gradient(160deg,#2a5448,#1b3a32)}
+#stage>*{position:absolute}
+
+/* メニューバー */
+#menubar{left:0;top:0;width:1920px;height:34px;display:flex;align-items:center;gap:22px;padding:0 20px;background:rgba(255,255,255,.2);backdrop-filter:blur(20px);color:#fff;font-size:15px}
+#menubar b{font-weight:700}
+#menubar i{display:block;height:8px;border-radius:4px;background:rgba(255,255,255,.55)}
+#menubar .sp{flex:1}
+#tray{width:26px;height:24px;border-radius:6px;display:grid;place-items:center}
+#tray svg{width:19px;height:19px}
+
+/* ウインドウ共通 */
+.win{border-radius:14px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.18),0 30px 80px -10px rgba(0,0,0,.55);overflow:hidden;transform-origin:50% 55%}
+.tb{height:40px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#ecebe8;border-bottom:1px solid #d5d3ce;font-size:14px;font-weight:600;color:#55504a}
+.tb u{width:13px;height:13px;border-radius:50%;display:block}
+.tb u:nth-child(1){background:#ed6a5e}.tb u:nth-child(2){background:#f4bf4f}.tb u:nth-child(3){background:#61c554}
+.tb span{flex:1;text-align:center;margin-right:55px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+#site{left:200px;top:64px;width:1520px}
+#site img{display:block;width:1520px;height:853px}
+.app{left:224px;top:52px;width:1472px}
+.app .frame{width:1472px;height:841px;overflow:hidden;background:#f1f3ef}
+.app iframe{display:block;width:1120px;height:640px;border:0;transform:scale(1.3143);transform-origin:0 0}
+
+/* 撮影 */
+#dim{inset:0;background:#000}
+#sel{border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.45),0 0 0 4000px rgba(0,0,0,.34)}
+#selsize{padding:3px 9px;border-radius:6px;background:rgba(0,0,0,.72);color:#fff;font-size:15px;font-variant-numeric:tabular-nums}
+#flash{inset:0;background:#fff}
+#hud{left:50%;top:812px;transform:translateX(-50%);display:flex;gap:14px;padding:20px 24px;border-radius:26px;background:rgba(22,30,27,.78);backdrop-filter:blur(18px);box-shadow:0 20px 50px rgba(0,0,0,.4)}
+.key{min-width:76px;height:76px;padding:0 18px;border-radius:14px;display:grid;place-items:center;font-size:38px;font-weight:600;color:#1c2a27;background:linear-gradient(#fff,#e6e8e3);box-shadow:0 5px 0 #a9afa6,0 8px 14px rgba(0,0,0,.35)}
+.key.down{background:linear-gradient(#f6cf93,#f3c178);box-shadow:0 2px 0 #b98738,0 4px 8px rgba(0,0,0,.35);translate:0 3px}
+
+/* PDF */
+#veil{inset:0;background:rgba(14,26,22,.62)}
+#paper{left:410px;top:120px;width:1100px;height:778px;padding:38px 44px;background:#fff;border-radius:4px;box-shadow:0 40px 90px rgba(0,0,0,.55)}
+#paper h3{margin:0 0 12px;padding-bottom:9px;border-bottom:1px solid #999;font-size:19px;font-weight:600;color:#555;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#paper svg{display:block;width:100%;height:415px}
+#paper h4{margin:20px 0 8px;display:flex;align-items:center;gap:10px;font-size:13px;letter-spacing:.14em;color:#666}
+#paper h4::after{content:"";flex:1;height:1px;background:#bbb}
+#paper p{margin:0;padding:7px 0;border-bottom:1px solid #ddd;font-size:17px}
+#paper p b{margin-right:14px}
+#pdfchip{left:1310px;top:92px;padding:9px 18px 9px 14px;border-radius:999px;display:flex;align-items:center;gap:9px;background:#d08a2c;color:#2d1d05;font-size:19px;font-weight:700;box-shadow:0 10px 26px rgba(0,0,0,.4)}
+#pdfchip em{font-style:normal;padding:2px 7px;border-radius:5px;background:#2d1d05;color:#f3c178;font-size:14px;letter-spacing:.06em}
+
+/* Finder */
+#finder{left:330px;top:140px;width:1260px;height:720px;background:#fff}
+#finder .body{display:grid;grid-template-columns:230px 1fr;height:680px}
+#finder .side{padding:22px 18px;background:#f0efec;border-right:1px solid #dcdad5;display:grid;gap:17px;align-content:start}
+#finder .side i{display:block;height:10px;border-radius:5px;background:#d2d0ca}
+#finder .side i.on{height:30px;margin:-10px -8px;border-radius:8px;background:#dcdad4}
+#finder .list{padding:10px 14px}
+#finder .head{display:grid;grid-template-columns:1fr 150px 110px;padding:8px 14px 10px;border-bottom:1px solid #e4e2dd}
+#finder .head i,.row i{display:block;height:9px;border-radius:5px;background:#dedcd6}
+.row{display:grid;grid-template-columns:1fr 150px 110px;align-items:center;height:50px;padding:0 14px;border-radius:9px;font-size:18px}
+.row:nth-child(odd){background:#f7f6f3}
+.row .name{display:flex;align-items:center;gap:13px}
+.row .ic{width:26px;height:32px;border-radius:4px;background:#fff;border:1.5px solid #c9c6bf;position:relative;flex:none}
+.row .ic::after{content:"";position:absolute;inset:auto 4px 5px 4px;height:11px;border-radius:2px;background:var(--c,#c9c6bf)}
+.row.sel{background:#2f6fde!important;color:#fff}
+.row.sel i{background:rgba(255,255,255,.6)}
+.menu{width:330px;padding:7px;border-radius:13px;background:rgba(246,245,242,.96);backdrop-filter:blur(24px);box-shadow:0 0 0 1px rgba(0,0,0,.14),0 18px 44px rgba(0,0,0,.34);font-size:18px}
+.menu div{height:36px;padding:0 12px;border-radius:7px;display:flex;align-items:center;gap:10px}
+.menu div.on{background:#2f6fde;color:#fff}
+.menu div.on i{background:rgba(255,255,255,.6)}
+.menu div span{margin-left:auto;font-size:15px;opacity:.6}
+.menu hr{margin:6px 12px;border:0;border-top:1px solid #d6d4ce}
+.menu i{display:block;height:9px;border-radius:5px;background:#cfcdc7}
+.menu svg{width:22px;height:22px;flex:none}
+.menu small{font-size:14px;opacity:.55;margin-left:2px}
+
+/* 字幕・カーソル・カード */
+#caption{left:0;top:992px;width:1920px;display:grid;place-items:center}
+#caption div{grid-area:1/1;padding:13px 34px;border-radius:999px;background:rgba(16,26,23,.86);backdrop-filter:blur(16px);color:#fff;font-size:31px;font-weight:700;letter-spacing:.03em;box-shadow:0 12px 34px rgba(0,0,0,.35);white-space:nowrap}
+#caption kbd{font:inherit;color:#f3c178}
+#cursor{left:0;top:0;width:34px;height:38px;pointer-events:none}
+#cross{left:0;top:0;width:36px;height:36px}
+.ripple{width:0;height:0}
+.ripple::after{content:"";position:absolute;left:-30px;top:-30px;width:60px;height:60px;border-radius:50%;border:3px solid #f3c178;background:rgba(243,193,120,.25)}
+.card{inset:0;display:grid;place-content:center;justify-items:center;text-align:center;color:#fff;background:
+ radial-gradient(1100px 700px at 50% 120%,rgba(243,193,120,.38),transparent 65%),linear-gradient(160deg,#24554a,#16332c)}
+.card h1{margin:34px 0 0;font-size:104px;font-weight:800;letter-spacing:.01em}
+.card h2{margin:18px 0 0;font-size:42px;font-weight:600;color:#f3c178;letter-spacing:.04em}
+.card .keys{margin-top:54px;display:flex;gap:26px}
+.card .keys div{padding:16px 26px;border-radius:18px;background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 1px rgba(255,255,255,.2);font-size:27px;font-weight:600;display:flex;align-items:center;gap:16px}
+.card .keys kbd{font:inherit;font-size:30px;padding:4px 14px;border-radius:10px;background:#fff;color:#1c2a27;letter-spacing:.08em}
+.card p{margin:40px 0 0;font-size:27px;color:rgba(255,255,255,.78)}
+.card p.url{margin-top:16px;font-size:25px;color:#fff;letter-spacing:.03em}
+</style>
+
+<div id="stage">
+ <div id="menubar"><b id="appname">Finder</b><i style="width:44px"></i><i style="width:36px"></i><i style="width:52px"></i><i style="width:40px"></i><span class="sp"></span>
+  <div id="tray"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><circle cx="12" cy="12" r="3.4"/></svg></div>
+  <i style="width:22px"></i><i style="width:22px"></i><i style="width:96px"></i></div>
+
+ <div class="win" id="site"><div class="tb"><u></u><u></u><u></u><span>komorebi-coffee.example ／ 春の新作ブレンド</span></div><img id="siteimg" alt=""></div>
+
+ <div class="win" id="finder"><div class="tb"><u></u><u></u><u></u><span>デザイン確認</span></div>
+  <div class="body"><div class="side"><i style="width:70%"></i><i style="width:52%"></i><i class="on"></i><i style="width:64%"></i><i style="width:45%"></i><i style="width:58%"></i></div>
+   <div class="list"><div class="head"><i style="width:60px"></i><i style="width:70px"></i><i style="width:44px"></i></div>
+    <div class="row"><div class="name"><b class="ic"></b><i style="width:210px"></i></div><i style="width:86px"></i><i style="width:50px"></i></div>
+    <div class="row"><div class="name"><b class="ic" style="--c:#d9534f"></b>LP_春ブレンド_v3.pdf</div><i style="width:92px"></i><i style="width:56px"></i></div>
+    <div class="row" id="file"><div class="name"><b class="ic" style="--c:#f3c178"></b>イベント告知_初稿.png</div><i style="width:80px"></i><i style="width:48px"></i></div>
+    <div class="row"><div class="name"><b class="ic" style="--c:#6aa9e9"></b>ロゴ案_B.png</div><i style="width:96px"></i><i style="width:52px"></i></div>
+    <div class="row"><div class="name"><b class="ic"></b><i style="width:170px"></i></div><i style="width:84px"></i><i style="width:44px"></i></div>
+    <div class="row"><div class="name"><b class="ic"></b><i style="width:240px"></i></div><i style="width:90px"></i><i style="width:58px"></i></div>
+    <div class="row"><div class="name"><b class="ic"></b><i style="width:150px"></i></div><i style="width:76px"></i><i style="width:50px"></i></div>
+    <div class="row"><div class="name"><b class="ic"></b><i style="width:200px"></i></div><i style="width:88px"></i><i style="width:46px"></i></div>
+    <div class="row"><div class="name"><b class="ic"></b><i style="width:132px"></i></div><i style="width:94px"></i><i style="width:54px"></i></div>
+    <div class="row"><div class="name"><b class="ic"></b><i style="width:226px"></i></div><i style="width:80px"></i><i style="width:50px"></i></div>
+    <div class="row"><div class="name"><b class="ic"></b><i style="width:164px"></i></div><i style="width:90px"></i><i style="width:44px"></i></div>
+    <div class="row"><div class="name"><b class="ic"></b><i style="width:190px"></i></div><i style="width:84px"></i><i style="width:56px"></i></div>
+   </div></div></div>
+
+ <div class="win app" id="app1"><div class="tb"><u></u><u></u><u></u><span></span></div><div class="frame"></div></div>
+ <div class="win app" id="app2"><div class="tb"><u></u><u></u><u></u><span></span></div><div class="frame"></div></div>
+
+ <div class="menu" id="ctx"><div>開く</div><div id="openwith">このアプリケーションで開く<span>▶</span></div><hr><div><i style="width:150px"></i></div><div><i style="width:110px"></i></div><div><i style="width:176px"></i></div><hr><div><i style="width:128px"></i></div></div>
+ <div class="menu" id="sub" style="width:300px"><div><i style="width:22px;height:22px;border-radius:6px"></i>プレビュー<small>（デフォルト）</small></div><hr><div id="ir"><span class="icon" style="margin:0;opacity:1"></span>ImageReview</div></div>
+
+ <div id="dim"></div><div id="sel"></div><div id="selsize"></div>
+ <div id="hud"><div class="key">⌘</div><div class="key">⇧</div><div class="key">8</div></div>
+ <div id="veil"></div>
+ <div id="paper"><h3></h3><div id="paperboard"></div><h4>修正指示</h4><div id="papernotes"></div></div>
+ <div id="pdfchip"><em>PDF</em>そのまま共有</div>
+
+ <div class="card" id="end"><span class="icon" data-size="190"></span><h1>ImageReview</h1><h2>スクリーンショットに、そのまま修正指示。</h2>
+  <div class="keys"><div><kbd>⌘⇧7</kbd>画面全体</div><div><kbd>⌘⇧8</kbd>範囲を選択</div><div><kbd>⌘⇧9</kbd>ウインドウ</div></div>
+  <p>メニューバーに常駐。ショートカットは変更・オフもできます</p><p class="url">github.com/Kobayasu31415/ImageReview</p></div>
+ <div class="card" id="title"><span class="icon" data-size="210"></span><h1>ImageReview</h1><h2>スクリーンショットに、そのまま修正指示。</h2></div>
+
+ <div id="caption"></div>
+ <div id="ripples"></div>
+ <svg id="cross" viewBox="0 0 36 36" fill="none" stroke-linecap="round"><path d="M18 2v13M18 21v13M2 18h13M21 18h13" stroke="#000" stroke-opacity=".55" stroke-width="4"/><path d="M18 2v13M18 21v13M2 18h13M21 18h13" stroke="#fff" stroke-width="1.6"/></svg>
+ <svg id="cursor" viewBox="0 0 24 27"><path d="M3 2v20.5l5.6-5.2 3.6 8 3.6-1.6-3.5-7.8H20z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+ <div id="flash"></div>
+</div>
+
+<script>
+'use strict';
+const FPS = 30, DURATION = 40;
+const $ = id => document.getElementById(id);
+
+// ---- 素材：レビュー対象の「LP」と「告知バナー」（どちらも架空） ----
+const FONT = 'font-family="Hiragino Sans, sans-serif"';
+const LP = `<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="786" viewBox="0 0 1400 786" ${FONT}>
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f2d3a2"/><stop offset="1" stop-color="#d99b5b"/></linearGradient></defs>
+<rect width="1400" height="786" fill="#fbf6ee"/>
+<circle cx="126" cy="60" r="17" fill="#1d4c42"/><text x="156" y="68" font-size="21" font-weight="700" fill="#2b2118" letter-spacing="2.5">KOMOREBI COFFEE</text>
+<g fill="#ddd2c2"><rect x="840" y="54" width="74" height="12" rx="6"/><rect x="950" y="54" width="58" height="12" rx="6"/><rect x="1044" y="54" width="86" height="12" rx="6"/></g>
+<rect x="1170" y="40" width="126" height="40" rx="20" fill="none" stroke="#2b2118" stroke-width="1.6"/><rect x="1196" y="55" width="74" height="10" rx="5" fill="#2b2118"/>
+<text x="112" y="246" font-size="19" font-weight="700" fill="#d08a2c" letter-spacing="5">SPRING BLEND 2027</text>
+<text x="108" y="322" font-size="60" font-weight="800" fill="#2b2118">春の新作ブレンド</text>
+<text x="112" y="384" font-size="23" fill="#6b5d4f">華やかな香りと、やさしい甘み。</text>
+<text x="112" y="422" font-size="23" fill="#6b5d4f">数量限定でお届けします。</text>
+<rect x="112" y="486" width="262" height="66" rx="33" fill="#3b6fd4"/><text x="243" y="527" text-anchor="middle" font-size="23" font-weight="700" fill="#fff">オンラインで購入</text>
+<text x="412" y="531" font-size="33" font-weight="800" fill="#2b2118">¥1,280</text><text x="540" y="530" font-size="17" fill="#6b5d4f">（税込）</text>
+<rect x="760" y="150" width="528" height="500" rx="40" fill="url(#g)"/>
+<ellipse cx="1024" cy="528" rx="190" ry="34" fill="#b97a3f" opacity=".5"/>
+<path d="M900 330h248v96a124 124 0 0 1-248 0z" fill="#fffaf2"/><path d="M1148 352h34a44 44 0 0 1 0 88h-40" fill="none" stroke="#fffaf2" stroke-width="20"/>
+<ellipse cx="1024" cy="332" rx="124" ry="22" fill="#5a3a22"/>
+<g fill="none" stroke="#fffaf2" stroke-width="9" stroke-linecap="round" opacity=".85"><path d="M976 280c-18-22 18-34 0-58"/><path d="M1024 268c-18-22 18-34 0-58"/><path d="M1072 280c-18-22 18-34 0-58"/></g>
+<g><rect x="112" y="704" width="360" height="120" rx="20" fill="#fff"/><rect x="520" y="704" width="360" height="120" rx="20" fill="#fff"/><rect x="928" y="704" width="360" height="120" rx="20" fill="#fff"/>
+<g fill="#eadfce"><circle cx="160" cy="752" r="20"/><circle cx="568" cy="752" r="20"/><circle cx="976" cy="752" r="20"/><rect x="196" y="738" width="180" height="12" rx="6"/><rect x="604" y="738" width="150" height="12" rx="6"/><rect x="1012" y="738" width="196" height="12" rx="6"/><rect x="196" y="760" width="120" height="10" rx="5"/><rect x="604" y="760" width="170" height="10" rx="5"/><rect x="1012" y="760" width="130" height="10" rx="5"/></g></g>
+</svg>`;
+const FLYER = `<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="620" viewBox="0 0 1320 620" ${FONT}>
+<rect width="1320" height="620" fill="#1d4c42"/>
+<circle cx="1090" cy="250" r="330" fill="#f3c178"/><circle cx="1090" cy="250" r="232" fill="#1d4c42"/><circle cx="1090" cy="250" r="150" fill="#d9534f"/>
+<g stroke="#f3c178" stroke-width="5" opacity=".5"><path d="M0 560h620M0 584h460"/></g>
+<text x="84" y="150" font-size="24" font-weight="700" fill="#f3c178" letter-spacing="8">KOMOREBI PRESENTS</text>
+<text x="80" y="268" font-size="98" font-weight="800" fill="#fffaf2" letter-spacing="1">SUMMER</text>
+<text x="80" y="372" font-size="98" font-weight="800" fill="#fffaf2" letter-spacing="1">COFFEE FES</text>
+<text x="84" y="446" font-size="30" font-weight="700" fill="#f3c178" letter-spacing="2">8.21 SAT — 8.22 SUN</text>
+<text x="84" y="500" font-size="24" fill="#cfe0d8">こもれび公園 芝生広場 ／ 入場無料</text>
+</svg>`;
+const ICON = s => `<svg width="${s}" height="${s}" viewBox="0 0 100 100"><defs><linearGradient id="ig" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f7566"/><stop offset="1" stop-color="#1d4c42"/></linearGradient></defs><rect x="4" y="4" width="92" height="92" rx="21" fill="url(#ig)" stroke="rgba(255,255,255,.25)"/><path d="M27 53l15 15 32-36" fill="none" stroke="#f3c178" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+for (const el of document.querySelectorAll('.icon')) el.innerHTML = ICON(el.dataset.size || 24);
+
+// ---- 舞台上の位置 ----
+const SCALE = 1472 / 1120, TITLEBAR = 40;   // 編集画面は 1120×640 で組み、舞台上では拡大して見せる
+const SITE = {x: 200, y: 64 + TITLEBAR, k: 1520 / 1400};          // LP を表示している位置と倍率
+const CROP = {x: 40, y: 110, w: 1320, h: 660};                    // 撮影する範囲（LP の座標）
+const SEL = {x: SITE.x + CROP.x * SITE.k, y: SITE.y + CROP.y * SITE.k, w: CROP.w * SITE.k, h: CROP.h * SITE.k};
+const inCrop = (x, y) => [(x - CROP.x) / CROP.w, (y - CROP.y) / CROP.h];
+const TAG1 = inCrop(80, 264), TAG2 = inCrop(84, 474), PRICE = inCrop(486, 520), TAG3 = [58 / 1320, 436 / 620];
+
+const apps = ['app1', 'app2'].map(id => ({id, el: $(id)}));
+const [app1, app2] = apps;
+const ORIGIN = [224, 52 + TITLEBAR];   // 編集画面（iframe）の左上。2つのウインドウは同じ位置に開く
+const fromFrame = (app, [x, y]) => [ORIGIN[0] + x * SCALE, ORIGIN[1] + y * SCALE];
+const boardPoint = (app, [fx, fy]) => { const r = app.doc.getElementById('board').getBoundingClientRect(); return [r.left + fx * r.width, r.top + fy * r.height]; };
+const controlPoint = (app, id) => { const r = app.doc.getElementById(id).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+const center = (el, dx = .5, dy = .5) => { const r = el.getBoundingClientRect(); return [r.left + r.width * dx, r.top + r.height * dy]; };
+// 価格を囲む手書きの丸（u: 0→1）
+const circle = u => { const a = (-150 + 400 * u) * Math.PI / 180, wob = 1 + .06 * Math.sin(u * 9); return [PRICE[0] + Math.cos(a) * .094 * wob, PRICE[1] + Math.sin(a) * .078 * wob]; };
+
+// ---- 本物の編集画面を操作する ----
+function pointer(app, type, at) {
+ const board = app.doc.getElementById('board');
+ const target = type === 'pointerdown' ? app.doc.elementFromPoint(at[0], at[1]) || board : board;
+ target.dispatchEvent(new app.win.PointerEvent(type, {clientX: at[0], clientY: at[1], button: 0, buttons: type === 'pointerup' ? 0 : 1, pointerId: 7, isPrimary: true, bubbles: true, cancelable: true}));
+}
+const click = (app, at) => { pointer(app, 'pointerdown', at); pointer(app, 'pointerup', at); };
+function type(app, id, text) {
+ const field = app.doc.getElementById('note-' + id);
+ if (!field || field.value === text) return;
+ field.value = text;
+ field.dispatchEvent(new app.win.Event('input', {bubbles: true}));
+}
+async function svgImage(svg) { const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); await img.decode(); return img; }
+async function png(img, c) {
+ const canvas = document.createElement('canvas'); canvas.width = c.w * 2; canvas.height = c.h * 2;
+ canvas.getContext('2d').drawImage(img, c.x, c.y, c.w, c.h, 0, 0, canvas.width, canvas.height);
+ return new Promise(done => canvas.toBlob(done, 'image/png'));
+}
+async function open(app, blob, name) { await app.win.load(new app.win.File([blob], name, {type: 'image/png'}), false); }
+function printPreview(app) {
+ const state = app.win.eval('state');
+ $('paper').querySelector('h3').textContent = '修正指示　' + state.name;
+ const board = document.importNode(app.doc.getElementById('board'), true);
+ board.removeAttribute('id'); board.removeAttribute('style');
+ $('paperboard').replaceChildren(board);
+ $('papernotes').replaceChildren(...state.notes.map(n => { const p = document.createElement('p'), b = document.createElement('b'); b.textContent = '＃' + n.id; p.append(b, n.text); return p; }));
+}
+
+// ---- 台本 ----
+let lpImage, flyerImage;
+const actions = [   // その時刻を過ぎたコマで一度だけ実行する
+ [7.0, async () => open(app1, await png(lpImage, CROP), 'スクリーンショット 2026-11-15 10.24.08.png')],
+ [9.5, () => click(app1, boardPoint(app1, TAG1))],
+ [12.8, () => click(app1, boardPoint(app1, TAG2))],
+ [16.2, () => app1.doc.getElementById('brush').click()],
+ [17.3, () => pointer(app1, 'pointerdown', boardPoint(app1, circle(0)))],
+ [18.9, () => pointer(app1, 'pointerup', boardPoint(app1, circle(1)))],
+ [20.5, () => printPreview(app1)],
+ [29.9, async () => open(app2, await png(flyerImage, {x: 0, y: 0, w: 1320, h: 620}), 'イベント告知_初稿.png')],
+ [32.2, () => click(app2, boardPoint(app2, TAG3))],
+];
+const typing = [
+ {a: 9.8, b: 11.6, app: app1, id: 1, text: '見出しをもう少し大きく'},
+ {a: 13.1, b: 15.0, app: app1, id: 2, text: 'ボタンはブランドの緑に'},
+ {a: 32.5, b: 34.2, app: app2, id: 1, text: '日付をもっと目立たせる'},
+];
+const STROKE = {a: 17.3, b: 18.9};
+const tag = (app, at) => () => fromFrame(app, boardPoint(app, at));
+const control = (app, id) => () => fromFrame(app, controlPoint(app, id));
+const beside = (app, at) => () => { const [x, y] = fromFrame(app, boardPoint(app, at)); return [x + 48, y + 42]; };   // 置いたタグが隠れないよう少し離れる
+const hold = null;   // 直前の位置にとどまる
+const path = [      // カーソルの通り道
+ [4.6, () => [SEL.x - 120, SEL.y + 150]], [5.2, () => [SEL.x, SEL.y]], [7.0, () => [SEL.x + SEL.w, SEL.y + SEL.h]], [8.6, hold],
+ [9.4, tag(app1, TAG1)], [9.65, hold], [10.1, beside(app1, TAG1)], [12.0, hold],
+ [12.7, tag(app1, TAG2)], [12.95, hold], [13.4, beside(app1, TAG2)], [15.4, hold],
+ [16.1, control(app1, 'brush')], [16.7, hold], [17.3, tag(app1, circle(0))],
+ [18.9, tag(app1, circle(1))], [19.6, hold], [20.3, control(app1, 'pdf')], [25.6, hold],
+ [27.2, () => center($('file'), .34)], [27.9, hold], [28.5, () => center($('openwith'), .45)], [29.0, hold],
+ [29.6, () => center($('ir'), .5)], [31.4, hold], [32.1, tag(app2, TAG3)], [32.35, hold], [32.8, beside(app2, TAG3)], [36, hold],
+];
+const clicks = [9.5, 12.8, 16.2, 20.4, 27.3, 29.9, 32.2];
+const captions = [
+ [2.9, 7.2, '直したい画面を見つけたら <kbd>⌘⇧8</kbd> で撮る'],
+ [7.5, 9.3, '撮った瞬間、ImageReview で開く'],
+ [9.5, 15.6, 'クリックで番号タグ。右に指示を書くだけ'],
+ [15.9, 19.9, 'ブラシで直接書き込みもできる'],
+ [20.6, 25.3, '「印刷 / PDF保存」で、そのまま渡せる1枚に'],
+ [25.9, 30.0, 'Finder の右クリックからも開ける'],
+ [30.3, 35.2, '画像も PDF も、同じように書き込める'],
+];
+for (const [, , html] of captions) { const d = document.createElement('div'); d.innerHTML = html; $('caption').append(d); }
+for (const t of clicks) { const d = document.createElement('div'); d.className = 'ripple'; d.style.position = 'absolute'; $('ripples').append(d); }
+
+// ---- 描画（時刻 t の見た目を決める） ----
+const clamp = x => Math.min(1, Math.max(0, x));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const ease = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const out = x => 1 - Math.pow(1 - x, 3);
+const span = (t, a, b, d = .3) => Math.min(prog(t, a, a + d), 1 - prog(t, b - d, b));   // a で現れ b で消える
+function show(el, opacity, transform = '') { el.style.opacity = opacity; el.style.visibility = opacity <= 0.001 ? 'hidden' : 'visible'; el.style.transform = transform; }
+const pop = (el, t, a, b) => { const o = span(t, a, b, .5); show(el, o, `scale(${.955 + .045 * out(prog(t, a, a + .5))}) translateY(${(1 - o) * 14}px)`); };
+
+function cursorAt(t) {
+ let i = path.findIndex(([at]) => at > t);
+ if (i < 0) i = path.length;
+ const point = k => { while (k > 0 && !path[k][1]) k--; return path[k][1](); };
+ if (i === 0) return point(0);
+ if (i === path.length || !path[i][1]) return point(i - 1);
+ if (t >= STROKE.a && t <= STROKE.b) return fromFrame(app1, boardPoint(app1, circle(prog(t, STROKE.a, STROKE.b))));
+ const from = point(i - 1), to = path[i][1](), u = ease(prog(t, path[i - 1][0], path[i][0]));
+ return [from[0] + (to[0] - from[0]) * u, from[1] + (to[1] - from[1]) * u];
+}
+
+function render(t) {
+ show($('title'), 1 - prog(t, 2.2, 2.7));
+ show($('end'), prog(t, 35.4, 36.1));
+ $('appname').textContent = (t >= 7.4 && t < 25.6) || t >= 30.2 ? 'ImageReview' : 'Finder';
+ $('tray').style.background = `rgba(243,193,120,${span(t, 4.2, 7.3, .2) * .9})`;
+
+ // 撮影
+ show($('site'), 1 - prog(t, 7.08, 7.28));
+ const keys = $('hud').children;
+ show($('hud'), span(t, 3.2, 5.1, .25), 'translateX(-50%)');
+ [...keys].forEach((k, i) => { k.style.opacity = prog(t, 3.3 + i * .22, 3.45 + i * .22); k.classList.toggle('down', t >= 4.15 && t < 4.75); });
+ const drag = ease(prog(t, 5.2, 7.0)), selecting = t >= 5.2 && t < 7.0;
+ show($('dim'), t >= 4.75 && t < 5.2 ? .34 : 0);
+ show($('sel'), selecting ? 1 : 0);
+ Object.assign($('sel').style, {left: SEL.x + 'px', top: SEL.y + 'px', width: SEL.w * drag + 'px', height: SEL.h * drag + 'px'});
+ show($('selsize'), selecting && drag > .05 ? 1 : 0);
+ Object.assign($('selsize').style, {left: SEL.x + SEL.w * drag + 12 + 'px', top: SEL.y + SEL.h * drag + 12 + 'px'});
+ $('selsize').textContent = Math.round(CROP.w * drag) + ' × ' + Math.round(CROP.h * drag);
+ show($('flash'), t >= 7.0 ? (1 - prog(t, 7.0, 7.4)) * .75 : 0);
+
+ // 編集画面
+ pop(app1.el, t, 7.35, 26.1);
+ pop(app2.el, t, 30.15, 36.2);
+ for (const app of apps) app.el.querySelector('.tb span').textContent = app.doc.title;
+ for (const line of typing) if (t >= line.a) type(line.app, line.id, line.text.slice(0, Math.round(prog(t, line.a, line.b) * line.text.length)));
+ if (t > STROKE.a && t < STROKE.b) pointer(app1, 'pointermove', boardPoint(app1, circle(prog(t, STROKE.a, STROKE.b))));
+
+ // PDF
+ show($('veil'), span(t, 20.6, 25.7, .4));
+ const up = out(prog(t, 20.7, 21.4));
+ show($('paper'), Math.min(prog(t, 20.7, 21.1), 1 - prog(t, 25.2, 25.6)), `translateY(${(1 - up) * 90}px) rotate(${(1 - up) * -1.5}deg)`);
+ show($('pdfchip'), Math.min(prog(t, 21.7, 22.0), 1 - prog(t, 25.2, 25.5)), `scale(${.8 + .2 * out(prog(t, 21.7, 22.1))})`);
+
+ // Finder
+ pop($('finder'), t, 25.7, 36.2);
+ $('file').classList.toggle('sel', t >= 27.3);
+ const row = $('file').getBoundingClientRect(), menuOn = t >= 27.3 && t < 29.9;
+ Object.assign($('ctx').style, {left: row.left + row.width * .34 + 6 + 'px', top: row.top + row.height / 2 + 6 + 'px'});
+ show($('ctx'), menuOn ? 1 : 0);
+ $('openwith').classList.toggle('on', t >= 28.35);
+ const item = $('openwith').getBoundingClientRect(), ctx = $('ctx').getBoundingClientRect();
+ Object.assign($('sub').style, {left: ctx.right - 5 + 'px', top: item.top - 7 + 'px'});
+ show($('sub'), menuOn && t >= 28.55 ? 1 : 0);
+ $('ir').classList.toggle('on', t >= 29.45);
+
+ // 字幕・カーソル
+ [...$('caption').children].forEach((el, i) => { const o = span(t, captions[i][0], captions[i][1], .28); show(el, o, `translateY(${(1 - o) * 10}px)`); });
+ const [x, y] = cursorAt(t), cross = t >= 4.6 && t < 7.0, arrow = t >= 7.0 && t < 35.6;
+ show($('cross'), cross ? 1 : 0, `translate(${x - 18}px,${y - 18}px)`);
+ show($('cursor'), arrow ? 1 : 0, `translate(${x - 4}px,${y - 3}px)`);
+ [...$('ripples').children].forEach((el, i) => { const u = prog(t, clicks[i], clicks[i] + .4); show(el, u > 0 && u < 1 ? 1 - u : 0, `translate(${x}px,${y}px) scale(${.3 + .9 * out(u)})`); });
+}
+
+// ---- コマ送り ----
+let nextAction = 0;
+async function step(frame) {
+ const t = frame / FPS;
+ while (nextAction < actions.length && actions[nextAction][0] <= t) await actions[nextAction++][1]();
+ render(t);
+}
+async function prepare() {
+ [lpImage, flyerImage] = await Promise.all([svgImage(LP), svgImage(FLYER)]);
+ $('siteimg').src = lpImage.src;
+ await Promise.all(apps.map(app => new Promise(done => {
+  const frame = document.createElement('iframe');
+  frame.onload = () => {
+   app.win = frame.contentWindow; app.doc = frame.contentDocument;
+   const style = app.doc.createElement('style');
+   style.textContent = '*{transition:none!important;caret-color:transparent}::-webkit-scrollbar{display:none}';
+   app.doc.head.append(style);
+   app.doc.getElementById('board').setPointerCapture = () => {};   // 合成したポインター入力では使えないため
+   done();
+  };
+  frame.src = '/index.html';
+  app.el.querySelector('.frame').append(frame);
+ })));
+ render(0);
+}
+window.demo = {fps: FPS, frames: DURATION * FPS, step, ready: prepare()};
+</script>
+</html>

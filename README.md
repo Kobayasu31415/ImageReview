@@ -2,6 +2,10 @@
 
 画像や PDF に番号タグと手書きで修正指示を書き込み、印刷・PDF 保存できる Mac アプリです。スクリーンショットを撮って、そのまま書き込めます。
 
+[![ImageReview の紹介動画（クリックで再生）](demo/poster.jpg)](demo/ImageReview-demo.mp4)
+
+画像をクリックすると、紹介動画（40 秒・音声なし）を再生できます。
+
 ## インストール
 
 1. [Releases](https://github.com/Kobayasu31415/ImageReview/releases/latest) から `ImageReview-1.0.dmg` をダウンロードして開く
