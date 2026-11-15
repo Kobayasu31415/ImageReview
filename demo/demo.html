@@ -1,6 +1,10 @@
 <!doctype html>
 <html lang="ja"><meta charset="utf-8"><title>ImageReview demo</title>
 <!--
+  注意：この台本は v1.0 の編集画面（リポジトリ直下にあった index.html）を操作する前提で書かれている。
+  編集画面を web/（React + Astryx）に作り替えたあとは、そのままでは動かない。撮り直すときは、
+  操作する相手を web/dist に合わせて書き直すか、タグ v1.0 をチェックアウトして使う。
+
   紹介動画の元になるページ。1920×1080 の舞台の上で、本物の編集画面（/index.html を iframe で読み込み）を
   台本どおりに操作する。時間は実時間ではなくコマ番号で進むので、demo/render がコマごとに
   window.demo.step(n) を呼んで撮影する（前から順に呼ぶこと）。

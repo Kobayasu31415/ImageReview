@@ -34,9 +34,11 @@ cp "$here/Info.plist" "$app/Contents/Info.plist"
 # ja.lproj があると、保存・印刷などシステム標準のダイアログも日本語になる。
 print 'CFBundleDisplayName = "ImageReview";' > "$app/Contents/Resources/ja.lproj/InfoPlist.strings"
 
-# 編集画面は Web 版と同じファイルをそのまま使う。
-cp "$root/index.html" "$root/pdf-import.js" "$root/export.js" "$app/Contents/Resources/web/"
-cp -R "$root/vendor" "$app/Contents/Resources/web/vendor"
+# 編集画面（web/：React + Astryx）をビルドして同梱する。
+command -v npm >/dev/null || { print -u2 "npm が見つかりません。Node.js を入れてから実行してください。"; exit 1 }
+[[ -d $root/web/node_modules ]] || npm --prefix "$root/web" ci
+npm --prefix "$root/web" run build >/dev/null
+cp -R "$root/web/dist/." "$app/Contents/Resources/web/"
 
 # アイコン
 swift "$here/make-icon.swift" "$stage/icon.png"

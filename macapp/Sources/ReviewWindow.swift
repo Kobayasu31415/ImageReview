@@ -1,7 +1,7 @@
 import AppKit
 import WebKit
 
-/// 修正ノート1件分のウインドウ。既存の index.html を WKWebView で表示し、
+/// 修正ノート1件分のウインドウ。編集画面（web/ をビルドしたもの）を WKWebView で表示し、
 /// ブラウザーなら標準で付いてくる機能（ファイル選択・確認ダイアログ・保存・印刷）を橋渡しする。
 final class ReviewWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler {
     let window: NSWindow
@@ -56,15 +56,15 @@ final class ReviewWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WKUI
     func isEmpty() async -> Bool {
         if pendingOpens > 0 { return false }
         if !ready { return true }
-        return await page("return !state.image && !dirty") as? Bool ?? false
+        return await page("return window.imageReview.isEmpty()") as? Bool ?? false
     }
 
     func hasUnsavedChanges() async -> Bool {
-        ready ? await page("return dirty") as? Bool ?? false : false
+        ready ? await page("return window.imageReview.isDirty()") as? Bool ?? false : false
     }
 
     func hasDocument() async -> Bool {
-        ready ? await page("return !!state.image") as? Bool ?? false : false
+        ready ? await page("return window.imageReview.hasDocument()") as? Bool ?? false : false
     }
 
     /// ファイルをページに渡して開く。`.json` は保存済みノートとして扱う。
@@ -75,9 +75,9 @@ final class ReviewWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WKUI
             try {
               const response = await fetch('/__open/' + id);
               if (!response.ok) throw Error();
-              await load(new File([await response.blob()], name, {type}), project);
+              await window.imageReview.open(new File([await response.blob()], name, {type}), project);
             } catch {
-              $('status').textContent = '読み込めませんでした。ファイルを開けるか確認してください。';
+              window.imageReview.notify('読み込めませんでした。ファイルを開けるか確認してください。');
             }
             """
             let arguments: [String: Any] = [

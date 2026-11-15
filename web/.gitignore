@@ -1,0 +1,5 @@
+node_modules/
+dist/
+# テーマエディタが書き出す確認用の見本
+themes/*/preview*
+themes/*/sheet*

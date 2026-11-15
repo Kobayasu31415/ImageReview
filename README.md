@@ -27,13 +27,13 @@ xattr -dr com.apple.quarantine /Applications/ImageReview.app
 
 - **Finder から開く**: 画像（PNG / JPEG / WebP / GIF / BMP）や PDF を右クリック →「このアプリケーションで開く」→ ImageReview
 - **スクリーンショット**: `⌘⇧7` 画面全体 / `⌘⇧8` 範囲を選択 / `⌘⇧9` ウインドウを選択。撮った画像がそのまま開きます
-- **画像を書き出す**: 番号タグと手書きを焼き込んだ画像（JPEG / PNG）を保存します。長辺 2000px に縮めて軽くでき、指示文を画像の下に入れることもできます
+- **書き出す**: 右上の「書き出す」から、番号タグと手書きを焼き込んだ画像（JPEG / PNG）の保存と、印刷 / PDF 保存ができます。画像は長辺 2000px に縮めて軽くでき、指示文を画像の下に入れることもできます
 - **AIに送る**: 画面下のバーで送り先（Claude のチャット / Claude Code / ChatGPT）と送り方（新規チャット / 直近のチャット）を選んでおくと、ボタン 1 回で相手のアプリを開いて指示文と画像を渡します。貼り付けまで自動で行うには、初回に求められる「アクセシビリティ」の許可が必要です（許可しない場合は、相手の画面で `⌘V` を押して貼り付けます）
 - **常駐**: ウインドウを閉じてもメニューバーに残ります。メニューバーのアイコンから、ショートカットの変更と個別オフ、ログイン時の起動を設定できます
 
 ## ソースからビルド
 
-Xcode は不要で、Command Line Tools（`xcode-select --install`）があればビルドできます。
+必要なものは、Command Line Tools（`xcode-select --install`）と Node.js です。Xcode は要りません。
 
 ```bash
 ./macapp/build.sh        # ビルドして /Applications にインストール
@@ -42,4 +42,8 @@ Xcode は不要で、Command Line Tools（`xcode-select --install`）があれ�
 
 キーチェーンにコード署名用の証明書（Apple Development など）があれば、インストール時にそれで署名します。簡易署名のままだと、ビルドし直すたびに「画面収録」と「アクセシビリティ」の許可が外れます。配布用の dmg は簡易署名のままです。
 
-編集画面だけなら、`index.html` をブラウザーで開いても使えます。
+### 構成
+
+- `web/` — 編集画面。React と [Astryx](https://github.com/meta/astryx) で作っていて、ビルドしたものをアプリに同梱します。画面だけを動かすなら `npm --prefix web install` のあと `npm --prefix web run dev`
+- `macapp/` — Mac アプリ本体（Swift）。ウインドウ、Finder 連携、スクリーンショット、AI への受け渡しを担当します
+- `demo/` — 紹介動画と、その台本・撮影ツール

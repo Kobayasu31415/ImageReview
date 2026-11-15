@@ -8,6 +8,7 @@ extension AppDelegate {
     func runTestHooks() {
         let env = ProcessInfo.processInfo.environment
         guard let out = env["IRN_TEST_OUT"] else { return }
+        if env["IRN_TEST_LIGHT"] != nil { NSApp.appearance = NSAppearance(named: .aqua) }   // ライトモードの見た目を確認する
         let dir = URL(fileURLWithPath: out)
         let delay = Double(env["IRN_TEST_DELAY"] ?? "") ?? 5
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
