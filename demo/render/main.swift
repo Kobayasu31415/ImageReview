@@ -1,6 +1,7 @@
 // demo/demo.html をコマ送りで撮影して動画にする。
 //   render <プロジェクトのルート> <出力.mp4>
 //   render <プロジェクトのルート> --stills <出力フォルダ> <秒,秒,...>   … 確認用に指定した時刻の静止画だけ書き出す
+// 先に編集画面をビルドしておく（npm --prefix web run build）。台本は web/dist を読み込む。
 // ビルド: swiftc -O demo/render/main.swift macapp/Sources/AppSchemeHandler.swift -o render
 import AppKit
 import AVFoundation
@@ -19,10 +20,22 @@ application.setActivationPolicy(.accessory)
 // アプリと同じ仕組みで、プロジェクトのフォルダを 1 つのオリジンとして配信する（デモから編集画面を操作するため）。
 let configuration = WKWebViewConfiguration()
 configuration.setURLSchemeHandler(AppSchemeHandler(root: URL(fileURLWithPath: arguments[1])), forURLScheme: AppSchemeHandler.scheme)
+// 編集画面の「AIに送る」の段は、Mac アプリの中（送り先の一覧と受け口があるとき）にだけ出る。
+// 撮影でも同じ画面になるよう、中身のない受け口と送り先の一覧を、読み込む全フレームに用意する。
+final class MessageSink: NSObject, WKScriptMessageHandler {
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {}
+}
+configuration.userContentController.add(MessageSink(), name: "native")
+configuration.userContentController.addUserScript(WKUserScript(
+    source: #"window.imageReviewAI={"claude":{"name":"Claude（チャット）","prefill":true},"claudeCode":{"name":"Claude Code","prefill":true},"chatgpt":{"name":"ChatGPT","prefill":true}};"#,
+    injectionTime: .atDocumentStart, forMainFrameOnly: false))
 let web = WKWebView(frame: NSRect(x: 0, y: 0, width: width, height: height), configuration: configuration)
 let window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: width, height: height),
                       styleMask: [.borderless], backing: .buffered, defer: false)
 window.contentView = web
+// 動画は、撮影する Mac の設定に関係なくライトモードで撮る（暗い背景の上で画面がはっきり見える）。
+web.appearance = NSAppearance(named: .aqua)
+window.appearance = NSAppearance(named: .aqua)
 window.orderBack(nil)
 web.load(URLRequest(url: URL(string: "irn://app/demo/demo.html")!))
 

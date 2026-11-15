@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="ja"><meta charset="utf-8"><title>ImageReview demo</title>
 <!--
-  注意：この台本は v1.0 の編集画面（リポジトリ直下にあった index.html）を操作する前提で書かれている。
-  編集画面を web/（React + Astryx）に作り替えたあとは、そのままでは動かない。撮り直すときは、
-  操作する相手を web/dist に合わせて書き直すか、タグ v1.0 をチェックアウトして使う。
-
-  紹介動画の元になるページ。1920×1080 の舞台の上で、本物の編集画面（/index.html を iframe で読み込み）を
+  紹介動画の元になるページ。1920×1080 の舞台の上で、本物の編集画面（web/dist を iframe で読み込み）を
   台本どおりに操作する。時間は実時間ではなくコマ番号で進むので、demo/render がコマごとに
   window.demo.step(n) を呼んで撮影する（前から順に呼ぶこと）。
+
+  編集画面は window.imageReview（web/src/main.tsx）と、ボタンの表示名を手がかりに操作している。
+  画面の文言や構成を変えたら、この台本も合わせて直す。
+  デスクトップ、Finder、AI のチャット画面は、動画用に描いた絵（実物の画面ではない）。
 -->
 <style>
 *{box-sizing:border-box}
@@ -19,7 +19,6 @@ body{font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-
  linear-gradient(160deg,#2a5448,#1b3a32)}
 #stage>*{position:absolute}
 
-/* メニューバー */
 #menubar{left:0;top:0;width:1920px;height:34px;display:flex;align-items:center;gap:22px;padding:0 20px;background:rgba(255,255,255,.2);backdrop-filter:blur(20px);color:#fff;font-size:15px}
 #menubar b{font-weight:700}
 #menubar i{display:block;height:8px;border-radius:4px;background:rgba(255,255,255,.55)}
@@ -27,7 +26,6 @@ body{font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-
 #tray{width:26px;height:24px;border-radius:6px;display:grid;place-items:center}
 #tray svg{width:19px;height:19px}
 
-/* ウインドウ共通 */
 .win{border-radius:14px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.18),0 30px 80px -10px rgba(0,0,0,.55);overflow:hidden;transform-origin:50% 55%}
 .tb{height:40px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#ecebe8;border-bottom:1px solid #d5d3ce;font-size:14px;font-weight:600;color:#55504a}
 .tb u{width:13px;height:13px;border-radius:50%;display:block}
@@ -37,10 +35,9 @@ body{font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-
 #site{left:200px;top:64px;width:1520px}
 #site img{display:block;width:1520px;height:853px}
 .app{left:224px;top:52px;width:1472px}
-.app .frame{width:1472px;height:841px;overflow:hidden;background:#f1f3ef}
+.app .frame{width:1472px;height:841px;overflow:hidden;background:#fff}
 .app iframe{display:block;width:1120px;height:640px;border:0;transform:scale(1.3143);transform-origin:0 0}
 
-/* 撮影 */
 #dim{inset:0;background:#000}
 #sel{border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.45),0 0 0 4000px rgba(0,0,0,.34)}
 #selsize{padding:3px 9px;border-radius:6px;background:rgba(0,0,0,.72);color:#fff;font-size:15px;font-variant-numeric:tabular-nums}
@@ -49,17 +46,31 @@ body{font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-
 .key{min-width:76px;height:76px;padding:0 18px;border-radius:14px;display:grid;place-items:center;font-size:38px;font-weight:600;color:#1c2a27;background:linear-gradient(#fff,#e6e8e3);box-shadow:0 5px 0 #a9afa6,0 8px 14px rgba(0,0,0,.35)}
 .key.down{background:linear-gradient(#f6cf93,#f3c178);box-shadow:0 2px 0 #b98738,0 4px 8px rgba(0,0,0,.35);translate:0 3px}
 
-/* PDF */
-#veil{inset:0;background:rgba(14,26,22,.62)}
-#paper{left:410px;top:120px;width:1100px;height:778px;padding:38px 44px;background:#fff;border-radius:4px;box-shadow:0 40px 90px rgba(0,0,0,.55)}
-#paper h3{margin:0 0 12px;padding-bottom:9px;border-bottom:1px solid #999;font-size:19px;font-weight:600;color:#555;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#paper svg{display:block;width:100%;height:415px}
-#paper h4{margin:20px 0 8px;display:flex;align-items:center;gap:10px;font-size:13px;letter-spacing:.14em;color:#666}
-#paper h4::after{content:"";flex:1;height:1px;background:#bbb}
-#paper p{margin:0;padding:7px 0;border-bottom:1px solid #ddd;font-size:17px}
-#paper p b{margin-right:14px}
-#pdfchip{left:1310px;top:92px;padding:9px 18px 9px 14px;border-radius:999px;display:flex;align-items:center;gap:9px;background:#d08a2c;color:#2d1d05;font-size:19px;font-weight:700;box-shadow:0 10px 26px rgba(0,0,0,.4)}
-#pdfchip em{font-style:normal;padding:2px 7px;border-radius:5px;background:#2d1d05;color:#f3c178;font-size:14px;letter-spacing:.06em}
+/* AI のチャット画面（特定の製品の見た目ではなく、動画用の一般的な絵） */
+#ai{left:320px;top:120px;width:1280px;height:800px;background:#fbfaf8}
+#ai .body{display:grid;grid-template-columns:250px 1fr;height:760px}
+#ai .side{padding:24px 18px;background:#f1efeb;border-right:1px solid #dedbd5;display:grid;gap:16px;align-content:start}
+#ai .side i{display:block;height:10px;border-radius:5px;background:#d6d3cc}
+#ai .side i.on{height:34px;margin:-10px -8px;border-radius:9px;background:#e2dfd8}
+#ai .main{position:relative;display:flex;flex-direction:column;padding:26px 60px 30px}
+#ai h3{margin:0 0 22px;font-size:20px;font-weight:600;color:#6d675f}
+#thread{flex:1;display:flex;flex-direction:column;gap:18px}
+.bubble{align-self:flex-end;max-width:620px;padding:16px 18px;border-radius:20px 20px 6px 20px;background:#ece9e3;font-size:19px;line-height:1.6;white-space:pre-wrap}
+.bubble svg,.chip svg{display:block;border-radius:10px;border:1px solid #d5d2cb;background:#fff}
+.bubble svg{width:300px;height:auto;margin-bottom:12px}
+.reply{align-self:flex-start;display:grid;gap:11px;width:560px}
+.reply b{font-size:18px;font-weight:600;color:#8a847b}
+.reply i{display:block;height:13px;border-radius:7px;background:#e2dfd8}
+#composer{padding:16px 18px 14px;border-radius:22px;background:#fff;box-shadow:0 0 0 1px #d9d6cf,0 10px 30px -14px rgba(0,0,0,.35);display:grid;gap:12px}
+.chip{justify-self:start;padding:6px;border-radius:14px;background:#f3f1ed}
+.chip svg{width:170px;height:auto}
+#prompt{font-size:19px;line-height:1.6;white-space:pre-wrap;min-height:30px;color:#2b2722}
+#prompt:empty::before{content:"メッセージを入力";color:#b3aea6}
+#composer .row{display:flex;align-items:center;gap:10px}
+#composer .row i{display:block;width:30px;height:30px;border-radius:9px;background:#efede9}
+#sendbtn{margin-left:auto;width:42px;height:42px;border-radius:50%;background:#1d4c42;display:grid;place-items:center}
+#sendbtn svg{width:20px;height:20px}
+#toast{left:50%;top:60px;transform:translateX(-50%);padding:13px 26px;border-radius:999px;background:rgba(20,20,20,.9);color:#fff;font-size:21px;font-weight:600;box-shadow:0 12px 30px rgba(0,0,0,.4);white-space:nowrap}
 
 /* Finder */
 #finder{left:330px;top:140px;width:1260px;height:720px;background:#fff}
@@ -87,7 +98,6 @@ body{font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-
 .menu svg{width:22px;height:22px;flex:none}
 .menu small{font-size:14px;opacity:.55;margin-left:2px}
 
-/* 字幕・カーソル・カード */
 #caption{left:0;top:992px;width:1920px;display:grid;place-items:center}
 #caption div{grid-area:1/1;padding:13px 34px;border-radius:999px;background:rgba(16,26,23,.86);backdrop-filter:blur(16px);color:#fff;font-size:31px;font-weight:700;letter-spacing:.03em;box-shadow:0 12px 34px rgba(0,0,0,.35);white-space:nowrap}
 #caption kbd{font:inherit;color:#f3c178}
@@ -131,6 +141,13 @@ body{font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-
    </div></div></div>
 
  <div class="win app" id="app1"><div class="tb"><u></u><u></u><u></u><span></span></div><div class="frame"></div></div>
+
+ <div class="win" id="ai"><div class="tb"><u></u><u></u><u></u><span>Claude Code</span></div>
+  <div class="body"><div class="side"><i class="on"></i><i style="width:72%"></i><i style="width:54%"></i><i style="width:66%"></i><i style="width:48%"></i><i style="width:60%"></i></div>
+   <div class="main"><h3>新規セッション</h3><div id="thread"></div>
+    <div id="composer"><div class="chip" id="chip"></div><div id="prompt"></div>
+     <div class="row"><i></i><i></i><div id="sendbtn"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></div></div></div></div></div></div>
+
  <div class="win app" id="app2"><div class="tb"><u></u><u></u><u></u><span></span></div><div class="frame"></div></div>
 
  <div class="menu" id="ctx"><div>開く</div><div id="openwith">このアプリケーションで開く<span>▶</span></div><hr><div><i style="width:150px"></i></div><div><i style="width:110px"></i></div><div><i style="width:176px"></i></div><hr><div><i style="width:128px"></i></div></div>
@@ -138,14 +155,12 @@ body{font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-
 
  <div id="dim"></div><div id="sel"></div><div id="selsize"></div>
  <div id="hud"><div class="key">⌘</div><div class="key">⇧</div><div class="key">8</div></div>
- <div id="veil"></div>
- <div id="paper"><h3></h3><div id="paperboard"></div><h4>修正指示</h4><div id="papernotes"></div></div>
- <div id="pdfchip"><em>PDF</em>そのまま共有</div>
+ <div id="toast">Claude Code に画像を貼り付けました</div>
 
- <div class="card" id="end"><span class="icon" data-size="190"></span><h1>ImageReview</h1><h2>スクリーンショットに、そのまま修正指示。</h2>
+ <div class="card" id="end"><span class="icon" data-size="190"></span><h1>ImageReview</h1><h2>スクリーンショットに書き込んで、そのまま AI へ。</h2>
   <div class="keys"><div><kbd>⌘⇧7</kbd>画面全体</div><div><kbd>⌘⇧8</kbd>範囲を選択</div><div><kbd>⌘⇧9</kbd>ウインドウ</div></div>
-  <p>メニューバーに常駐。ショートカットは変更・オフもできます</p><p class="url">github.com/Kobayasu31415/ImageReview</p></div>
- <div class="card" id="title"><span class="icon" data-size="210"></span><h1>ImageReview</h1><h2>スクリーンショットに、そのまま修正指示。</h2></div>
+  <p>Claude・Claude Code・ChatGPT に、ボタン 1 回で渡せます</p><p class="url">github.com/Kobayasu31415/ImageReview</p></div>
+ <div class="card" id="title"><span class="icon" data-size="210"></span><h1>ImageReview</h1><h2>スクリーンショットに書き込んで、そのまま AI へ。</h2></div>
 
  <div id="caption"></div>
  <div id="ripples"></div>
@@ -156,7 +171,7 @@ body{font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-
 
 <script>
 'use strict';
-const FPS = 30, DURATION = 40;
+const FPS = 30, DURATION = 45;
 const $ = id => document.getElementById(id);
 
 // ---- 素材：レビュー対象の「LP」と「告知バナー」（どちらも架空） ----
@@ -191,7 +206,8 @@ const FLYER = `<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="620"
 <text x="84" y="446" font-size="30" font-weight="700" fill="#f3c178" letter-spacing="2">8.21 SAT — 8.22 SUN</text>
 <text x="84" y="500" font-size="24" fill="#cfe0d8">こもれび公園 芝生広場 ／ 入場無料</text>
 </svg>`;
-const ICON = s => `<svg width="${s}" height="${s}" viewBox="0 0 100 100"><defs><linearGradient id="ig" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f7566"/><stop offset="1" stop-color="#1d4c42"/></linearGradient></defs><rect x="4" y="4" width="92" height="92" rx="21" fill="url(#ig)" stroke="rgba(255,255,255,.25)"/><path d="M27 53l15 15 32-36" fill="none" stroke="#f3c178" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+// アプリアイコンと同じ図柄（macapp/make-icon.swift）。
+const ICON = s => `<svg width="${s}" height="${s}" viewBox="0 0 160 160"><defs><linearGradient id="ig" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b6b5d"/><stop offset="1" stop-color="#1d4c42"/></linearGradient></defs><rect width="160" height="160" rx="36" fill="url(#ig)"/><rect x="26" y="46" width="100" height="80" rx="12" fill="#fbf6ee"/><circle cx="52" cy="72" r="9" fill="#f3c178"/><path d="M26 126l34-34 18 16 14-12 34 28v2z" fill="#2f7566"/><circle cx="118" cy="50" r="25" fill="#c93235" stroke="#256254" stroke-width="6"/><path d="M111 44l9-7v27" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 for (const el of document.querySelectorAll('.icon')) el.innerHTML = ICON(el.dataset.size || 24);
 
 // ---- 舞台上の位置 ----
@@ -205,83 +221,104 @@ const TAG1 = inCrop(80, 264), TAG2 = inCrop(84, 474), PRICE = inCrop(486, 520), 
 const apps = ['app1', 'app2'].map(id => ({id, el: $(id)}));
 const [app1, app2] = apps;
 const ORIGIN = [224, 52 + TITLEBAR];   // 編集画面（iframe）の左上。2つのウインドウは同じ位置に開く
-const fromFrame = (app, [x, y]) => [ORIGIN[0] + x * SCALE, ORIGIN[1] + y * SCALE];
-const boardPoint = (app, [fx, fy]) => { const r = app.doc.getElementById('board').getBoundingClientRect(); return [r.left + fx * r.width, r.top + fy * r.height]; };
-const controlPoint = (app, id) => { const r = app.doc.getElementById(id).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+const fromFrame = ([x, y]) => [ORIGIN[0] + x * SCALE, ORIGIN[1] + y * SCALE];
+// 画像は枠の中に縦横比を保って収まっている（余白がある）ので、SVG の座標変換から実際の位置を求める。
+const boardPoint = (app, [fx, fy]) => {
+ const svg = app.doc.querySelector('svg.board'), box = svg.viewBox.baseVal;
+ const p = new app.win.DOMPoint(fx * box.width, fy * box.height).matrixTransform(svg.getScreenCTM());
+ return [p.x, p.y];
+};
+const control = (app, label) => [...app.doc.querySelectorAll('button, [role=radio], [role=menuitem]')]
+ .find(el => el.textContent.trim() === label || el.getAttribute('aria-label') === label);
+const controlPoint = (app, label) => { const r = control(app, label).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
 const center = (el, dx = .5, dy = .5) => { const r = el.getBoundingClientRect(); return [r.left + r.width * dx, r.top + r.height * dy]; };
 // 価格を囲む手書きの丸（u: 0→1）
 const circle = u => { const a = (-150 + 400 * u) * Math.PI / 180, wob = 1 + .06 * Math.sin(u * 9); return [PRICE[0] + Math.cos(a) * .094 * wob, PRICE[1] + Math.sin(a) * .078 * wob]; };
 
 // ---- 本物の編集画面を操作する ----
+const settle = () => new Promise(done => setTimeout(done, 30));   // React が画面に反映し終えるのを待つ
 function pointer(app, type, at) {
- const board = app.doc.getElementById('board');
+ const board = app.doc.querySelector('svg.board');
  const target = type === 'pointerdown' ? app.doc.elementFromPoint(at[0], at[1]) || board : board;
  target.dispatchEvent(new app.win.PointerEvent(type, {clientX: at[0], clientY: at[1], button: 0, buttons: type === 'pointerup' ? 0 : 1, pointerId: 7, isPrimary: true, bubbles: true, cancelable: true}));
 }
 const click = (app, at) => { pointer(app, 'pointerdown', at); pointer(app, 'pointerup', at); };
-function type(app, id, text) {
- const field = app.doc.getElementById('note-' + id);
- if (!field || field.value === text) return;
- field.value = text;
- field.dispatchEvent(new app.win.Event('input', {bubbles: true}));
-}
+const press = (app, label) => control(app, label).click();
+const type = (app, id, text) => app.win.imageReview.editor.setNoteText(id, text);
 async function svgImage(svg) { const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); await img.decode(); return img; }
 async function png(img, c) {
  const canvas = document.createElement('canvas'); canvas.width = c.w * 2; canvas.height = c.h * 2;
  canvas.getContext('2d').drawImage(img, c.x, c.y, c.w, c.h, 0, 0, canvas.width, canvas.height);
  return new Promise(done => canvas.toBlob(done, 'image/png'));
 }
-async function open(app, blob, name) { await app.win.load(new app.win.File([blob], name, {type: 'image/png'}), false); }
-function printPreview(app) {
- const state = app.win.eval('state');
- $('paper').querySelector('h3').textContent = '修正指示　' + state.name;
- const board = document.importNode(app.doc.getElementById('board'), true);
- board.removeAttribute('id'); board.removeAttribute('style');
- $('paperboard').replaceChildren(board);
- $('papernotes').replaceChildren(...state.notes.map(n => { const p = document.createElement('p'), b = document.createElement('b'); b.textContent = '＃' + n.id; p.append(b, n.text); return p; }));
+async function open(app, blob, name) { await app.win.imageReview.open(new app.win.File([blob], name, {type: 'image/png'}), false); }
+/** 編集画面の画像（注釈つき）を、舞台側に置ける絵として写し取る。 */
+function picture(app) {
+ const copy = document.importNode(app.doc.querySelector('svg.board'), true);
+ for (const name of ['class', 'data-zoom', 'data-tool', 'role', 'aria-label']) copy.removeAttribute(name);
+ copy.querySelectorAll('.board-tag-ring').forEach(ring => ring.remove());
+ return copy;
 }
+
+const NOTE1 = '見出しをもう少し大きく', NOTE2 = 'ボタンはブランドの緑に', NOTE3 = '日付をもっと目立たせる';
+const PROMPT = `添付した画像の番号の箇所について、次の修正をお願いします。\n\n1. ${NOTE1}\n2. ${NOTE2}`;
 
 // ---- 台本 ----
 let lpImage, flyerImage;
 const actions = [   // その時刻を過ぎたコマで一度だけ実行する
  [7.0, async () => open(app1, await png(lpImage, CROP), 'スクリーンショット 2026-11-15 10.24.08.png')],
- [9.5, () => click(app1, boardPoint(app1, TAG1))],
- [12.8, () => click(app1, boardPoint(app1, TAG2))],
- [16.2, () => app1.doc.getElementById('brush').click()],
- [17.3, () => pointer(app1, 'pointerdown', boardPoint(app1, circle(0)))],
- [18.9, () => pointer(app1, 'pointerup', boardPoint(app1, circle(1)))],
- [20.5, () => printPreview(app1)],
- [29.9, async () => open(app2, await png(flyerImage, {x: 0, y: 0, w: 1320, h: 620}), 'イベント告知_初稿.png')],
- [32.2, () => click(app2, boardPoint(app2, TAG3))],
+ [9.3, () => click(app1, boardPoint(app1, TAG1))],
+ [12.4, () => click(app1, boardPoint(app1, TAG2))],
+ [15.4, () => press(app1, 'ブラシ')],
+ [16.4, () => pointer(app1, 'pointerdown', boardPoint(app1, circle(0)))],
+ [17.9, () => pointer(app1, 'pointerup', boardPoint(app1, circle(1)))],
+ [19.1, () => press(app1, 'Claude Code')],
+ [20.2, () => press(app1, 'AIに送る')],
+ [20.6, () => { $('prompt').textContent = PROMPT; }],
+ [21.5, () => $('chip').replaceChildren(picture(app1))],
+ [23.4, () => {
+  const bubble = document.createElement('div'); bubble.className = 'bubble';
+  bubble.append(picture(app1), PROMPT);
+  $('thread').append(bubble);
+  $('chip').replaceChildren(); $('prompt').textContent = '';
+ }],
+ [24.3, () => { const reply = document.createElement('div'); reply.className = 'reply'; reply.id = 'reply'; reply.innerHTML = '<b>画像を確認しています…</b>'; $('thread').append(reply); }],
+ [32.4, async () => open(app2, await png(flyerImage, {x: 0, y: 0, w: 1320, h: 620}), 'イベント告知_初稿.png')],
+ [34.4, () => click(app2, boardPoint(app2, TAG3))],
+ [37.6, () => press(app2, '書き出す')],
 ];
 const typing = [
- {a: 9.8, b: 11.6, app: app1, id: 1, text: '見出しをもう少し大きく'},
- {a: 13.1, b: 15.0, app: app1, id: 2, text: 'ボタンはブランドの緑に'},
- {a: 32.5, b: 34.2, app: app2, id: 1, text: '日付をもっと目立たせる'},
+ {a: 9.6, b: 11.2, app: app1, id: 1, text: NOTE1},
+ {a: 12.7, b: 14.3, app: app1, id: 2, text: NOTE2},
+ {a: 34.7, b: 36.3, app: app2, id: 1, text: NOTE3},
 ];
-const STROKE = {a: 17.3, b: 18.9};
-const tag = (app, at) => () => fromFrame(app, boardPoint(app, at));
-const control = (app, id) => () => fromFrame(app, controlPoint(app, id));
-const beside = (app, at) => () => { const [x, y] = fromFrame(app, boardPoint(app, at)); return [x + 48, y + 42]; };   // 置いたタグが隠れないよう少し離れる
+const STROKE = {a: 16.4, b: 17.9};
+const tag = (app, at) => () => fromFrame(boardPoint(app, at));
+const beside = (app, at) => () => { const [x, y] = fromFrame(boardPoint(app, at)); return [x + 48, y + 42]; };   // 置いたタグが隠れないよう少し離れる
+const button = (app, label) => () => fromFrame(controlPoint(app, label));
 const hold = null;   // 直前の位置にとどまる
 const path = [      // カーソルの通り道
- [4.6, () => [SEL.x - 120, SEL.y + 150]], [5.2, () => [SEL.x, SEL.y]], [7.0, () => [SEL.x + SEL.w, SEL.y + SEL.h]], [8.6, hold],
- [9.4, tag(app1, TAG1)], [9.65, hold], [10.1, beside(app1, TAG1)], [12.0, hold],
- [12.7, tag(app1, TAG2)], [12.95, hold], [13.4, beside(app1, TAG2)], [15.4, hold],
- [16.1, control(app1, 'brush')], [16.7, hold], [17.3, tag(app1, circle(0))],
- [18.9, tag(app1, circle(1))], [19.6, hold], [20.3, control(app1, 'pdf')], [25.6, hold],
- [27.2, () => center($('file'), .34)], [27.9, hold], [28.5, () => center($('openwith'), .45)], [29.0, hold],
- [29.6, () => center($('ir'), .5)], [31.4, hold], [32.1, tag(app2, TAG3)], [32.35, hold], [32.8, beside(app2, TAG3)], [36, hold],
+ [4.6, () => [SEL.x - 120, SEL.y + 150]], [5.2, () => [SEL.x, SEL.y]], [7.0, () => [SEL.x + SEL.w, SEL.y + SEL.h]], [8.4, hold],
+ [9.2, tag(app1, TAG1)], [9.45, hold], [9.9, beside(app1, TAG1)], [11.6, hold],
+ [12.3, tag(app1, TAG2)], [12.55, hold], [13.0, beside(app1, TAG2)], [14.7, hold],
+ [15.3, button(app1, 'ブラシ')], [15.8, hold], [16.4, tag(app1, circle(0))],
+ [17.9, tag(app1, circle(1))], [18.3, hold], [19.0, button(app1, 'Claude Code')], [19.5, hold],
+ [20.1, button(app1, 'AIに送る')], [22.6, hold], [23.3, () => center($('sendbtn'))], [28.4, hold],
+ [29.8, () => center($('file'), .34)], [30.4, hold], [31.0, () => center($('openwith'), .45)], [31.5, hold],
+ [32.1, () => center($('ir'), .5)], [33.6, hold], [34.3, tag(app2, TAG3)], [34.55, hold], [35.0, beside(app2, TAG3)], [36.8, hold],
+ [37.5, button(app2, '書き出す')], [41, hold],
 ];
-const clicks = [9.5, 12.8, 16.2, 20.4, 27.3, 29.9, 32.2];
+const clicks = [9.3, 12.4, 15.4, 19.1, 20.2, 23.4, 29.9, 32.4, 34.4, 37.6];
 const captions = [
  [2.9, 7.2, '直したい画面を見つけたら <kbd>⌘⇧8</kbd> で撮る'],
- [7.5, 9.3, '撮った瞬間、ImageReview で開く'],
- [9.5, 15.6, 'クリックで番号タグ。右に指示を書くだけ'],
- [15.9, 19.9, 'ブラシで直接書き込みもできる'],
- [20.6, 25.3, '「印刷 / PDF保存」で、そのまま渡せる1枚に'],
- [25.9, 30.0, 'Finder の右クリックからも開ける'],
- [30.3, 35.2, '画像も PDF も、同じように書き込める'],
+ [7.5, 9.1, '撮った瞬間、ImageReview で開く'],
+ [9.3, 14.6, 'クリックで番号タグ。右に指示を書くだけ'],
+ [14.8, 18.1, 'ブラシで直接書き込みもできる'],
+ [18.4, 20.7, '送り先を選んで「AIに送る」を押すだけ'],
+ [20.9, 28.1, '指示文と画像が、そのまま AI に渡る'],
+ [28.7, 32.5, 'Finder の右クリックからも開ける'],
+ [32.8, 36.6, '画像も PDF も、同じように書き込める'],
+ [36.9, 40.4, '画像や PDF にも書き出せる'],
 ];
 for (const [, , html] of captions) { const d = document.createElement('div'); d.innerHTML = html; $('caption').append(d); }
 for (const t of clicks) { const d = document.createElement('div'); d.className = 'ripple'; d.style.position = 'absolute'; $('ripples').append(d); }
@@ -301,15 +338,15 @@ function cursorAt(t) {
  const point = k => { while (k > 0 && !path[k][1]) k--; return path[k][1](); };
  if (i === 0) return point(0);
  if (i === path.length || !path[i][1]) return point(i - 1);
- if (t >= STROKE.a && t <= STROKE.b) return fromFrame(app1, boardPoint(app1, circle(prog(t, STROKE.a, STROKE.b))));
+ if (t >= STROKE.a && t <= STROKE.b) return fromFrame(boardPoint(app1, circle(prog(t, STROKE.a, STROKE.b))));
  const from = point(i - 1), to = path[i][1](), u = ease(prog(t, path[i - 1][0], path[i][0]));
  return [from[0] + (to[0] - from[0]) * u, from[1] + (to[1] - from[1]) * u];
 }
 
 function render(t) {
  show($('title'), 1 - prog(t, 2.2, 2.7));
- show($('end'), prog(t, 35.4, 36.1));
- $('appname').textContent = (t >= 7.4 && t < 25.6) || t >= 30.2 ? 'ImageReview' : 'Finder';
+ show($('end'), prog(t, 40.4, 41.1));
+ $('appname').textContent = t >= 20.9 && t < 28.3 ? 'Claude' : (t >= 7.4 && t < 28.3) || t >= 32.6 ? 'ImageReview' : 'Finder';
  $('tray').style.background = `rgba(243,193,120,${span(t, 4.2, 7.3, .2) * .9})`;
 
  // 撮影
@@ -327,33 +364,38 @@ function render(t) {
  show($('flash'), t >= 7.0 ? (1 - prog(t, 7.0, 7.4)) * .75 : 0);
 
  // 編集画面
- pop(app1.el, t, 7.35, 26.1);
- pop(app2.el, t, 30.15, 36.2);
+ pop(app1.el, t, 7.35, 28.6);
+ pop(app2.el, t, 32.65, 41.2);
  for (const app of apps) app.el.querySelector('.tb span').textContent = app.doc.title;
  for (const line of typing) if (t >= line.a) type(line.app, line.id, line.text.slice(0, Math.round(prog(t, line.a, line.b) * line.text.length)));
  if (t > STROKE.a && t < STROKE.b) pointer(app1, 'pointermove', boardPoint(app1, circle(prog(t, STROKE.a, STROKE.b))));
 
- // PDF
- show($('veil'), span(t, 20.6, 25.7, .4));
- const up = out(prog(t, 20.7, 21.4));
- show($('paper'), Math.min(prog(t, 20.7, 21.1), 1 - prog(t, 25.2, 25.6)), `translateY(${(1 - up) * 90}px) rotate(${(1 - up) * -1.5}deg)`);
- show($('pdfchip'), Math.min(prog(t, 21.7, 22.0), 1 - prog(t, 25.2, 25.5)), `scale(${.8 + .2 * out(prog(t, 21.7, 22.1))})`);
+ // AI のチャット画面
+ pop($('ai'), t, 20.85, 28.6);
+ show($('chip'), $('chip').childElementCount ? 1 : 0, `scale(${.7 + .3 * out(prog(t, 21.5, 21.8))})`);
+ $('chip').style.display = $('chip').childElementCount ? '' : 'none';
+ show($('toast'), span(t, 21.6, 24.6, .25), `translateX(-50%) translateY(${(1 - prog(t, 21.6, 21.85)) * -16}px)`);
+ const reply = $('reply');
+ if (reply) {   // 返事は中身を作らず、考えている様子だけを見せる
+  const wanted = Math.min(4, Math.floor((t - 24.9) / .55) + 1);
+  while (reply.querySelectorAll('i').length < wanted) { const line = document.createElement('i'); line.style.width = ['92%', '78%', '85%', '46%'][reply.querySelectorAll('i').length]; reply.append(line); }
+ }
 
  // Finder
- pop($('finder'), t, 25.7, 36.2);
- $('file').classList.toggle('sel', t >= 27.3);
- const row = $('file').getBoundingClientRect(), menuOn = t >= 27.3 && t < 29.9;
+ pop($('finder'), t, 28.7, 41.2);
+ $('file').classList.toggle('sel', t >= 29.9);
+ const row = $('file').getBoundingClientRect(), menuOn = t >= 29.9 && t < 32.4;
  Object.assign($('ctx').style, {left: row.left + row.width * .34 + 6 + 'px', top: row.top + row.height / 2 + 6 + 'px'});
  show($('ctx'), menuOn ? 1 : 0);
- $('openwith').classList.toggle('on', t >= 28.35);
+ $('openwith').classList.toggle('on', t >= 30.9);
  const item = $('openwith').getBoundingClientRect(), ctx = $('ctx').getBoundingClientRect();
  Object.assign($('sub').style, {left: ctx.right - 5 + 'px', top: item.top - 7 + 'px'});
- show($('sub'), menuOn && t >= 28.55 ? 1 : 0);
- $('ir').classList.toggle('on', t >= 29.45);
+ show($('sub'), menuOn && t >= 31.1 ? 1 : 0);
+ $('ir').classList.toggle('on', t >= 32.0);
 
  // 字幕・カーソル
  [...$('caption').children].forEach((el, i) => { const o = span(t, captions[i][0], captions[i][1], .28); show(el, o, `translateY(${(1 - o) * 10}px)`); });
- const [x, y] = cursorAt(t), cross = t >= 4.6 && t < 7.0, arrow = t >= 7.0 && t < 35.6;
+ const [x, y] = cursorAt(t), cross = t >= 4.6 && t < 7.0, arrow = t >= 7.0 && t < 40.6;
  show($('cross'), cross ? 1 : 0, `translate(${x - 18}px,${y - 18}px)`);
  show($('cursor'), arrow ? 1 : 0, `translate(${x - 4}px,${y - 3}px)`);
  [...$('ripples').children].forEach((el, i) => { const u = prog(t, clicks[i], clicks[i] + .4); show(el, u > 0 && u < 1 ? 1 - u : 0, `translate(${x}px,${y}px) scale(${.3 + .9 * out(u)})`); });
@@ -363,8 +405,11 @@ function render(t) {
 let nextAction = 0;
 async function step(frame) {
  const t = frame / FPS;
- while (nextAction < actions.length && actions[nextAction][0] <= t) await actions[nextAction++][1]();
+ let acted = false;
+ while (nextAction < actions.length && actions[nextAction][0] <= t) { await actions[nextAction++][1](); acted = true; }
+ if (acted) await settle();
  render(t);
+ await settle();
 }
 async function prepare() {
  [lpImage, flyerImage] = await Promise.all([svgImage(LP), svgImage(FLYER)]);
@@ -373,15 +418,16 @@ async function prepare() {
   const frame = document.createElement('iframe');
   frame.onload = () => {
    app.win = frame.contentWindow; app.doc = frame.contentDocument;
+   // 動きは実時間ではなくコマ番号で進めるので、画面側のアニメーションは止めておく。
    const style = app.doc.createElement('style');
-   style.textContent = '*{transition:none!important;caret-color:transparent}::-webkit-scrollbar{display:none}';
+   style.textContent = '*,*::before,*::after{transition:none!important;animation-duration:0s!important;caret-color:transparent}::-webkit-scrollbar{display:none}';
    app.doc.head.append(style);
-   app.doc.getElementById('board').setPointerCapture = () => {};   // 合成したポインター入力では使えないため
    done();
   };
-  frame.src = '/index.html';
+  frame.src = '/web/dist/index.html';
   app.el.querySelector('.frame').append(frame);
  })));
+ await new Promise(done => setTimeout(done, 300));
  render(0);
 }
 window.demo = {fps: FPS, frames: DURATION * FPS, step, ready: prepare()};
