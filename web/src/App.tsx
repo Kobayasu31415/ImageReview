@@ -39,11 +39,13 @@ const ZOOMS: {value: Zoom; label: string}[] = [
   {value: '3', label: '300%'},
 ];
 
+/** アプリアイコンと同じ図柄（画像のカードに赤い番号タグ）を、小さく簡略にしたロゴ。 */
 function Mark() {
   return (
     <svg className="mark" viewBox="0 0 24 24" aria-hidden>
-      <rect width="24" height="24" rx="6" />
-      <path d="M6.5 12.5l4 4 7.5-8.5" />
+      <rect className="mark-plate" width="24" height="24" rx="6" />
+      <rect className="mark-card" x="4" y="8" width="13.5" height="11" rx="2" />
+      <circle className="mark-tag" cx="17.5" cy="7.5" r="4.4" />
     </svg>
   );
 }

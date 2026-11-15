@@ -6,9 +6,11 @@ html, body, #root { height: 100%; }
 .screen { height: 100dvh; }
 
 /* ---- ロゴ ---- */
+/* アプリアイコンと同じ配色。ブランドの絵なので、テーマやライト / ダークでは変えない。 */
 .mark { width: var(--spacing-6); height: var(--spacing-6); flex: none; }
-.mark rect { fill: var(--color-accent); }
-.mark path { fill: none; stroke: var(--color-on-accent); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.mark-plate { fill: #1d4c42; }
+.mark-card { fill: #fbf6ee; }
+.mark-tag { fill: #c93235; stroke: #1d4c42; stroke-width: 1.6; }
 
 /* ---- 作業面 ---- */
 .board-viewport {
