@@ -1,10 +1,19 @@
 import AppKit
+import Carbon.HIToolbox
 import ServiceManagement
 import UniformTypeIdentifiers
 
 /// メニューバーに常駐し、Finder からのファイルとスクリーンショットをウインドウに振り分ける。
 /// ウインドウがない間は Dock から消え、メニューバーのアイコンだけが残る。
+///
+/// ⌘Q や Dock の「終了」でもアプリは終わらず、ウインドウを閉じて裏で動き続ける（ショートカットを
+/// いつでも使えるようにするため）。本当に終わらせるのは、メニューバーの「完全に終了」だけ。
+/// 待機中のメモリを抑えるため、ウインドウを閉じてしばらくたつと、編集画面（WebKit）を
+/// 読み込んでいないまっさらなプロセスに入れ替わる（slimDown）。
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    /// ウインドウを出さず、裏で待機する状態で起動されたか。
+    static let startsInBackground = CommandLine.arguments.contains("--background")
+
     private(set) var windows: [ReviewWindow] = []
     private let files = AppSchemeHandler(root: Bundle.main.resourceURL!.appendingPathComponent("web"))
     private let shortcuts = ShortcutCenter.shared
@@ -13,6 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var cascade = NSPoint.zero
     private var capturing = false
     private var openedAtLaunch = false
+    private var quitsCompletely = false
+    private var hasLoadedEditor = false      // このプロセスで編集画面（WebKit）を一度でも使ったか
+    private var slimDownTimer: Timer?
+    private var terminationSignal: DispatchSourceSignal?
 
     // MARK: 起動と終了
 
@@ -20,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.mainMenu = makeMainMenu()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem.autosaveName = "ImageReview"   // プロセスが入れ替わっても、メニューバーでの位置を保つ
         statusItem.button?.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "ImageReview")
         statusItem.menu = NSMenu()
         statusItem.menu?.delegate = self
@@ -33,11 +47,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let launch = NSAppleEventManager.shared().currentAppleEvent
         let atLogin = launch?.eventID == kAEOpenApplication
             && launch?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
-        if atLogin || openedAtLaunch {
+        if atLogin || openedAtLaunch || Self.startsInBackground {
             if windows.isEmpty { NSApp.setActivationPolicy(.accessory) }
         } else {
             newDocument(nil)
         }
+
+        // kill（SIGTERM）は「完全に終了」として扱う。未保存の確認も通る。ビルドスクリプトが入れ替えの前に使う。
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        // ここ（メインキューの処理の中）から直接終了を始めると、未保存の確認を待つ間メインキューが塞がり、
+        // 確認の処理そのものが進まなくなる。いったん抜けて、通常のイベント処理から始める。
+        source.setEventHandler { [weak self] in
+            self?.perform(#selector(AppDelegate.quitCompletely(_:)), with: nil, afterDelay: 0)
+        }
+        source.resume()
+        terminationSignal = source
         #if TESTHOOKS
         runTestHooks()
         #endif
@@ -51,6 +76,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // ログアウト・再起動・システム終了のときは、理由つきの終了要求が届く。
+        let bySystem = NSAppleEventManager.shared().currentAppleEvent?.attributeDescriptor(forKeyword: kAEQuitReason) != nil
+        guard quitsCompletely || bySystem else {
+            retireToBackground()
+            return .terminateCancel
+        }
         if windows.isEmpty { return .terminateNow }
         Task { @MainActor in
             var unsaved = false
@@ -66,9 +97,68 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 NSApp.activate(ignoringOtherApps: true)
                 quit = alert.runModal() == .alertFirstButtonReturn
             }
+            if !quit { quitsCompletely = false }
             sender.reply(toApplicationShouldTerminate: quit)
         }
         return .terminateLater
+    }
+
+    @objc func quitCompletely(_ sender: Any?) {
+        quitsCompletely = true
+        Log.write("quit completely requested (windows=\(windows.count))")
+        NSApp.terminate(nil)
+    }
+
+    // MARK: 裏での待機
+
+    /// ⌘Q や Dock の「終了」。ウインドウを閉じて（未保存があれば 1 枚ずつ確認して）、メニューバーで動き続ける。
+    private func retireToBackground() {
+        windows.forEach { $0.window.performClose(nil) }
+        guard !UserDefaults.standard.bool(forKey: "explainedBackground") else { return }
+        UserDefaults.standard.set(true, forKey: "explainedBackground")
+        let alert = NSAlert()
+        alert.messageText = "ImageReview はメニューバーで動き続けます"
+        alert.informativeText = "ウインドウを閉じても、ショートカットでの撮影はそのまま使えます。完全に終了するには、メニューバーのアイコンから「ImageReview を完全に終了」を選んでください。"
+        alert.addButton(withTitle: "OK")
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = "Mac の起動時にも自動で開始する"
+        alert.suppressionButton?.state = .on
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
+        if alert.suppressionButton?.state == .on, SMAppService.mainApp.status != .enabled {
+            try? SMAppService.mainApp.register()
+        }
+    }
+
+    /// ウインドウがなくなってしばらくしたら、身軽なプロセスに入れ替わる。
+    private func scheduleSlimDown() {
+        slimDownTimer?.invalidate()
+        guard hasLoadedEditor else { return }
+        slimDownTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: false) { [weak self] _ in self?.slimDown() }
+    }
+
+    /// 編集画面を一度使うと、ウインドウを閉じても WebKit の補助プロセスなどが残り、100MB 前後を使い続ける。
+    /// そこで、裏で待機するだけの新しいプロセス（WebKit を読み込まない）を起動して、自分は終了する。
+    private func slimDown() {
+        guard windows.isEmpty else { return }
+        let isBusy = capturing || statusItem.button?.isHighlighted == true || NSApp.modalWindow != nil
+            || NSApp.windows.contains { $0.isVisible && !($0 is NSPanel) && !$0.className.contains("StatusBar") }
+        guard !isBusy else { return scheduleSlimDown() }   // 設定を開いている間などは、あとでやり直す
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        configuration.arguments = ["--background"]
+        configuration.activates = false
+        configuration.addsToRecentItems = false
+        shortcuts.suspend()   // 同じショートカットを、新しいプロセスが登録できるように手放す
+        Log.write("slim down: relaunching in background")
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
+            DispatchQueue.main.async {
+                if error == nil { exit(0) }
+                Log.write("slim down failed: \(error!.localizedDescription)")
+                self.shortcuts.resume()
+            }
+        }
     }
 
     // MARK: ウインドウ
@@ -78,8 +168,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.onClose = { [weak self] closed in
             guard let self else { return }
             self.windows.removeAll { $0 === closed }
-            if self.windows.isEmpty { NSApp.setActivationPolicy(.accessory) }
+            if self.windows.isEmpty {
+                NSApp.setActivationPolicy(.accessory)
+                self.scheduleSlimDown()
+            }
         }
+        hasLoadedEditor = true
+        slimDownTimer?.invalidate()
         cascade = window.window.cascadeTopLeft(from: cascade)
         windows.append(window)
         return window
@@ -274,7 +369,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item("AIへの自動貼り付けを許可…", #selector(allowAutoPaste)),
         ]) + [
             .separator(),
-            item("ImageReviewを終了", #selector(NSApplication.terminate)),
+            item("ImageReview を完全に終了", #selector(quitCompletely)),
         ]
     }
 
@@ -294,7 +389,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 item("ImageReviewを隠す", #selector(NSApplication.hide), key: "h"),
                 hideOthers,
                 .separator(),
-                item("ImageReviewを終了", #selector(NSApplication.terminate), key: "q"),
+                item("ウインドウを閉じて裏で待機", #selector(NSApplication.terminate), key: "q"),
+                item("ImageReview を完全に終了", #selector(quitCompletely)),
             ]),
             submenu("ファイル", [
                 item("新規ウインドウ", #selector(newDocument), key: "n"),

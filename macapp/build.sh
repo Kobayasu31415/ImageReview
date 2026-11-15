@@ -80,7 +80,9 @@ bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Content
 # pipefail のもとで「見つからない」と同じ失敗扱いになってしまう）。
 running() { [[ -n $(ps -axo comm= | grep -xF "$target/Contents/MacOS/ImageReview") ]] }
 if running; then
-  osascript -e 'with timeout of 10 seconds' -e "tell application id \"$bundle_id\" to quit" -e 'end timeout' >/dev/null 2>&1 || true
+  # 「終了」の要求（⌘Q と同じ）ではウインドウを閉じて裏で待機するだけなので、SIGTERM で完全に終了させる。
+  # 未保存の作業があれば、アプリが確認を出して終了を待つ。
+  kill -TERM $(ps -axo pid=,comm= | grep -F " $target/Contents/MacOS/ImageReview" | awk '{print $1}') 2>/dev/null || true
   for _ in {1..20}; do running || break; sleep 0.5; done
   if running; then
     print -u2 "ImageReview が終了していません。未保存の作業を保存するか、終了の確認に答えてから、もう一度実行してください。"

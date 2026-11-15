@@ -114,6 +114,10 @@ extension AppDelegate {
                     operation.runModal(for: window.window, delegate: nil, didRun: nil, contextInfo: nil)
                     try? await Task.sleep(nanoseconds: 4_000_000_000)
                 }
+                if let hold = Double(env["IRN_TEST_HOLD"] ?? "") {   // 終了せずに待つ（常駐中のメモリを外から測るため）
+                    try? log.write(to: dir.appendingPathComponent("result.txt"), atomically: true, encoding: .utf8)
+                    try? await Task.sleep(nanoseconds: UInt64(hold * 1_000_000_000))
+                }
                 log += sent.map { "sent: \($0)\n" }.joined()
                 try? log.write(to: dir.appendingPathComponent("result.txt"), atomically: true, encoding: .utf8)
                 exit(0)
