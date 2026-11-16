@@ -9,6 +9,7 @@ internal sealed class ReviewWindow : Form
     private const string Host = "imagereview.example";
     private const string Entry = "https://" + Host + "/index.html";
     private readonly WebView2 browser = new() { Dock = DockStyle.Fill };
+    private readonly Dictionary<string, AIDestination> destinations = AIHandoff.Discover();
     private ReviewInput? pending;
     private bool ready;
     private bool checkingClose;
@@ -43,9 +44,38 @@ internal sealed class ReviewWindow : Form
             core.NewWindowRequested += (_, args) => args.Handled = true;
             core.DocumentTitleChanged += (_, _) => Text = core.DocumentTitle;
             core.NavigationCompleted += EditorLoaded;
+            var catalog = destinations.ToDictionary(pair => pair.Key, pair => new { name = pair.Value.Name, prefill = false });
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(
+                $"if (location.href === '{Entry}') window.imageReviewAI = {JsonSerializer.Serialize(catalog)};");
+            if (IsDisposed) return;
+            core.WebMessageReceived += ReceiveAIRequest;
             core.Navigate(Entry);
         }
         catch (Exception ex) { ShowStartupError(ex.Message); }
+    }
+
+    private sealed record AIRequest(string Type, string Target, bool Fresh, string Image);
+
+    private async void ReceiveAIRequest(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
+    {
+        if (args.Source != Entry) return;
+        string message;
+        bool error = false;
+        try
+        {
+            var request = JsonSerializer.Deserialize<AIRequest>(args.WebMessageAsJson, JsonSerializerOptions.Web);
+            if (request?.Type != "send") return;
+            if (!destinations.TryGetValue(request.Target, out var target))
+                throw new InvalidDataException("送り先を選び直してください。");
+            message = await AIHandoff.SendAsync(target, request.Fresh, request.Image);
+        }
+        catch (Exception ex)
+        {
+            error = true;
+            message = $"AI に画像を渡せませんでした。{ex.Message}";
+        }
+        if (!IsDisposed)
+            browser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "aiResult", message, error }));
     }
 
     private void ShowStartupError(string details)

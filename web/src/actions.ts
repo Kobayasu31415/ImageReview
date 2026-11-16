@@ -13,18 +13,24 @@ let markReady = () => {};
 export const uiReady = new Promise<void>(resolve => (markReady = resolve));
 export const setUIReady = () => markReady();
 
-// ---- Mac アプリとの橋渡し ----
+// ---- デスクトップアプリとの橋渡し ----
 export type Destination = {name: string; prefill: boolean};
 type NativeBridge = {postMessage(message: unknown): void};
 declare global {
   interface Window {
     imageReviewAI?: Record<string, Destination>;
     webkit?: {messageHandlers?: {native?: NativeBridge}};
+    chrome?: {webview?: NativeBridge & {
+      addEventListener(type: 'message', listener: (event: MessageEvent) => void): void;
+    }};
   }
 }
 const native = window.webkit?.messageHandlers?.native;
-/** 「AIに送る」の送り先。Mac アプリの中でだけ値が入る。 */
-export const destinations: Record<string, Destination> = native ? window.imageReviewAI ?? {} : {};
+const windows = window.chrome?.webview;
+export const destinations: Record<string, Destination> = window.imageReviewAI ?? {};
+windows?.addEventListener('message', ({data}) => {
+  if (data?.type === 'aiResult') ui.notify(data.message, data.error);
+});
 
 // ---- 開く ----
 export async function openFile(file: File, isProject = /\.json$/i.test(file.name)) {
@@ -90,6 +96,10 @@ export async function sendToAI(target: string, fresh: boolean) {
   const png = async (withNotes: boolean) =>
     readAsDataURL(await canvasBlob(await composeImage(doc, height, {maxEdge: AI_MAX_EDGE, withNotes}), 'image/png'));
   try {
+    if (windows) {
+      windows.postMessage({type: 'send', target, fresh, image: await png(lines.length > 0)});
+      return;
+    }
     // 指示文を文字として渡せるかはアプリ側が決めるので、渡せない場合に使う「指示文入り」の画像も一緒に渡す。
     native?.postMessage({
       type: 'send', target, fresh, prompt,

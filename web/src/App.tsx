@@ -153,7 +153,9 @@ function SendBar() {
   return (
     <HStack gap={3} vAlign="center" hAlign="between" wrap="wrap">
       <Text color="secondary" size="sm">
-        {mode === 'new' ? '新しいチャットを開いて、指示文と画像を渡します。' : 'いま開いているチャットに、指示文と画像を渡します。'}
+        {window.chrome?.webview
+          ? '修正指示を画像にまとめます。入力欄に画像が出なければ Ctrl+V で貼り付けてください。'
+          : mode === 'new' ? '新しいチャットを開いて、指示文と画像を渡します。' : 'いま開いているチャットに、指示文と画像を渡します。'}
       </Text>
       <HStack gap={3} vAlign="center">
         <SegmentedControl label="送り先" value={target} onChange={value => { setTarget(value); remembered.set('sendTarget', value); }}>
