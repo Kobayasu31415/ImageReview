@@ -8,11 +8,13 @@ https://github.com/user-attachments/assets/b557cfc5-a264-4f50-9ac3-d81c82523f6a
 
 ## インストール
 
-### Windows 版（このブランチからビルド）
+### Windows 版
 
-1. Windows で Node.js 22.13 以降と .NET 10 SDK を用意し、`winapp\build.cmd` を実行します。
-2. `dist\ImageReview-Windows\ImageReview.exe` を起動します。別の PC に移すときはフォルダーごとコピーし、.NET 10 Desktop Runtime と Microsoft Edge WebView2 Runtime を用意してください。
-3. 通知領域の ImageReview アイコンを右クリックし、「エクスプローラーの『プログラムから開く』に登録」を一度選びます。その後は画像・PDF・保存したノート（`.review.json`）を右クリックし、「プログラムから開く」→「ImageReview」で編集できます。アプリを移動した場合は再登録してください。
+1. [Windows x64 インストーラー（ImageReview 1.2）](https://github.com/Kobayasu31415/ImageReview/releases/download/v1.2/ImageReview-1.2-Windows-x64-Setup.exe) をダウンロードします。以前の版が起動中なら、通知領域のアイコンから「ImageReview を終了」を選びます。
+2. ダウンロードした `ImageReview-1.2-Windows-x64-Setup.exe` を開き、画面の案内に従ってインストールします。
+3. スタートメニューから「ImageReview」を起動します。画像・PDF・保存したノート（`.review.json`）は、エクスプローラーで右クリックして「プログラムから開く」→「ImageReview」でも開けます。
+
+対象は Windows 11 x64 と Windows 10 22H2 x64 です。現在のユーザー用にインストールされ、.NET は同梱されています。Microsoft Edge WebView2 Runtime が未導入の場合はセットアップ時にダウンロードするため、インターネット接続が必要です。
 
 | 撮影ショートカット | 操作 |
 | --- | --- |
@@ -55,6 +57,18 @@ xattr -dr com.apple.quarantine /Applications/ImageReview.app
 - **AIに送る**: 画面下のバーで送り先（Claude のチャット / Claude Code / ChatGPT）と送り方（新規チャット / 直近のチャット）を選んでおくと、ボタン 1 回で相手のアプリを開いて指示文と画像を渡します。貼り付けまで自動で行うには、初回に求められる「アクセシビリティ」の許可が必要です（許可しない場合は、相手の画面で `⌘V` を押して貼り付けます）
 - **クリップボードにコピー**: 「AIに送る」の隣のボタンで、番号タグ・手書き・修正指示をまとめた画像をクリップボードに入れます。貼り付ける先を自分で選びたいとき（ブラウザーのチャットや Slack など）に使い、入力欄で `⌘V` を押します
 - **常駐**: ウインドウを閉じても、`⌘Q` や Dock の「終了」を選んでも、メニューバーで動き続けるので、ショートカットはいつでも使えます。待機中は 20MB ほどしか使いません（ウインドウを閉じて 20 秒たつと、編集画面を読み込んでいない軽い状態に切り替わります）。完全に終了するには、メニューバーのアイコンから「ImageReview を完全に終了」を選びます。同じメニューで、ショートカットの変更と個別オフ、ログイン時の起動も設定できます
+
+## Windows 版をソースからビルド
+
+Windows で Node.js 22.13 以降と .NET 10 SDK を用意し、リポジトリのルートで実行します。
+
+```bat
+winapp\build.cmd
+```
+
+`dist\ImageReview-Windows\ImageReview.exe` が生成されます。このフォルダーを別の PC にコピーして使う場合は、その PC に .NET 10 Desktop Runtime と WebView2 Runtime が必要です。
+
+配布用インストーラーを作るには Inno Setup 6 を追加し、`winapp\build.cmd --installer` を実行します。`dist\` にバージョン番号付きのセットアップファイルが生成されます。コンパイラーを標準以外の場所に配置した場合は、環境変数 `ISCC` に `ISCC.exe` のフルパスを指定してください。
 
 ## Mac 版をソースからビルド
 
