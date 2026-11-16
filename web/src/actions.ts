@@ -94,11 +94,17 @@ async function reviewPng(doc: Doc, height: number, withNotes: boolean) {
   return readAsDataURL(await canvasBlob(canvas, 'image/png'));
 }
 
+/** 「クリップボードにコピー」を出せるか（デスクトップアプリの中だけ）。 */
+export const canCopyReviewImage = Boolean(windows || native);
+
 export async function copyReviewImage() {
   const {doc, height} = editor.getState();
-  if (!windows || !doc.image) return;
+  const host = windows ?? native;
+  if (!host || !doc.image) return;
   try {
-    windows.postMessage({type: 'copy', image: await reviewPng(doc, height, true)});
+    host.postMessage({type: 'copy', image: await reviewPng(doc, height, true)});
+    // Windows 版はアプリ側が結果を知らせてくる。Mac 版には返事の経路がないので、ここで知らせる。
+    if (!windows) ui.notify('画像をコピーしました。貼り付けたいチャットで ⌘V を押してください。');
   } catch {
     ui.notify('コピーする画像を作れませんでした。', true);
   }

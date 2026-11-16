@@ -17,7 +17,9 @@ import {useToast} from '@astryxdesign/core/Toast';
 import {Toolbar} from '@astryxdesign/core/Toolbar';
 import {VStack} from '@astryxdesign/core/VStack';
 import {useEffect, useState} from 'react';
-import {chooseFiles, copyReviewImage, destinations, MEDIA_TYPES, openFile, saveNote, sendToAI, setUIReady, ui} from './actions';
+import {
+  canCopyReviewImage, chooseFiles, copyReviewImage, destinations, MEDIA_TYPES, openFile, saveNote, sendToAI, setUIReady, ui,
+} from './actions';
 import {Board, BoardArtwork} from './Board';
 import {ExportDialog, PdfPageDialog, remembered, type PdfRequest} from './dialogs';
 import {editor, useEditor, type Tool, type Zoom} from './editor';
@@ -167,7 +169,7 @@ function SendBar() {
           <SegmentedControlItem value="new" label="新規チャット" />
           <SegmentedControlItem value="recent" label="直近のチャット" />
         </SegmentedControl>
-        {window.chrome?.webview && (
+        {canCopyReviewImage && (
           <Button label="クリップボードにコピー" icon={<Icon icon={ClipboardDocumentIcon} />}
             isDisabled={!doc.image} clickAction={copyReviewImage} />
         )}

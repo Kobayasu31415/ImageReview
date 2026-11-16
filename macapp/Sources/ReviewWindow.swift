@@ -130,12 +130,24 @@ final class ReviewWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WKUI
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         if message.body as? String == "print" { return printDocument() }
-        // 「AIに送る」: 編集画面が作った注釈入りの画像（PNG の data URL）と指示文を受け取る。
-        guard let body = message.body as? [String: Any], body["type"] as? String == "send",
-              let destination = AIDestination(rawValue: body["target"] as? String ?? ""),
-              let image = Self.decode(body["image"]) else { return }
-        destination.send(image: image, imageWithNotes: Self.decode(body["imageWithNotes"]),
-                         fresh: body["fresh"] as? Bool ?? true, prompt: body["prompt"] as? String ?? "")
+        // 編集画面が作った注釈入りの画像（PNG の data URL）を受け取る。
+        guard let body = message.body as? [String: Any], let image = Self.decode(body["image"]) else { return }
+        switch body["type"] as? String {
+        case "copy":
+            // 「クリップボードにコピー」: 貼り付け先は使う人が自分で選ぶ。指示文は画像の下に入っている。
+            #if TESTHOOKS
+            if let record = AIDestination.recordForTesting { return record("copy", image) }   // 確認中は本物のクリップボードを書き換えない
+            #endif
+            Paster.copy(image: image)
+            Log.write("copy image to clipboard (\(image.count / 1024)KB)")
+        case "send":
+            // 「AIに送る」: 送り先を開き、指示文と画像を渡す。
+            guard let destination = AIDestination(rawValue: body["target"] as? String ?? "") else { return }
+            destination.send(image: image, imageWithNotes: Self.decode(body["imageWithNotes"]),
+                             fresh: body["fresh"] as? Bool ?? true, prompt: body["prompt"] as? String ?? "")
+        default:
+            break
+        }
     }
 
     /// data URL（data:image/png;base64,…）の中身を取り出す。
