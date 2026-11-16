@@ -54,25 +54,36 @@ internal sealed class ReviewWindow : Form
         catch (Exception ex) { ShowStartupError(ex.Message); }
     }
 
-    private sealed record AIRequest(string Type, string Target, bool Fresh, string Image);
+    private sealed record AIRequest(string Type, string Image, string? Target = null, bool Fresh = false);
 
     private async void ReceiveAIRequest(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
     {
         if (args.Source != Entry) return;
         string message;
         bool error = false;
+        AIRequest? request = null;
         try
         {
-            var request = JsonSerializer.Deserialize<AIRequest>(args.WebMessageAsJson, JsonSerializerOptions.Web);
-            if (request?.Type != "send") return;
-            if (!destinations.TryGetValue(request.Target, out var target))
-                throw new InvalidDataException("送り先を選び直してください。");
-            message = await AIHandoff.SendAsync(target, request.Fresh, request.Image);
+            request = JsonSerializer.Deserialize<AIRequest>(args.WebMessageAsJson, JsonSerializerOptions.Web);
+            switch (request?.Type)
+            {
+                case "copy":
+                    AIHandoff.CopyImage(request.Image);
+                    message = "画像をコピーしました。貼り付けたいチャットで Ctrl+V を押してください。";
+                    break;
+                case "send":
+                    if (request.Target == null || !destinations.TryGetValue(request.Target, out var target))
+                        throw new InvalidDataException("送り先を選び直してください。");
+                    message = await AIHandoff.SendAsync(target, request.Fresh, request.Image);
+                    break;
+                default:
+                    return;
+            }
         }
         catch (Exception ex)
         {
             error = true;
-            message = $"AI に画像を渡せませんでした。{ex.Message}";
+            message = request?.Type == "copy" ? $"画像をコピーできませんでした。{ex.Message}" : $"AI に画像を渡せませんでした。{ex.Message}";
         }
         if (!IsDisposed)
             browser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "aiResult", message, error }));

@@ -70,7 +70,7 @@ internal static class AIHandoff
         return manual;
     }
 
-    private static void CopyImage(string image)
+    internal static void CopyImage(string image)
     {
         const string prefix = "data:image/png;base64,";
         if (!image.StartsWith(prefix, StringComparison.Ordinal)) throw new InvalidDataException("PNG 画像を読み込めません。");

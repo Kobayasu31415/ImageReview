@@ -1,5 +1,5 @@
 import {
-  ArrowDownTrayIcon, ArrowUturnLeftIcon, BookmarkSquareIcon, DocumentTextIcon, FolderOpenIcon, HashtagIcon,
+  ArrowDownTrayIcon, ArrowUturnLeftIcon, BookmarkSquareIcon, ClipboardDocumentIcon, DocumentTextIcon, FolderOpenIcon, HashtagIcon,
   PaintBrushIcon, PaperAirplaneIcon, PhotoIcon, PrinterIcon,
 } from '@heroicons/react/24/outline';
 import {Button} from '@astryxdesign/core/Button';
@@ -17,7 +17,7 @@ import {useToast} from '@astryxdesign/core/Toast';
 import {Toolbar} from '@astryxdesign/core/Toolbar';
 import {VStack} from '@astryxdesign/core/VStack';
 import {useEffect, useState} from 'react';
-import {chooseFiles, destinations, MEDIA_TYPES, openFile, saveNote, sendToAI, setUIReady, ui} from './actions';
+import {chooseFiles, copyReviewImage, destinations, MEDIA_TYPES, openFile, saveNote, sendToAI, setUIReady, ui} from './actions';
 import {Board, BoardArtwork} from './Board';
 import {ExportDialog, PdfPageDialog, remembered, type PdfRequest} from './dialogs';
 import {editor, useEditor, type Tool, type Zoom} from './editor';
@@ -157,7 +157,7 @@ function SendBar() {
           ? '修正指示を画像にまとめます。入力欄に画像が出なければ Ctrl+V で貼り付けてください。'
           : mode === 'new' ? '新しいチャットを開いて、指示文と画像を渡します。' : 'いま開いているチャットに、指示文と画像を渡します。'}
       </Text>
-      <HStack gap={3} vAlign="center">
+      <HStack gap={3} vAlign="center" wrap="wrap">
         <SegmentedControl label="送り先" value={target} onChange={value => { setTarget(value); remembered.set('sendTarget', value); }}>
           {ids.map(id => (
             <SegmentedControlItem key={id} value={id} label={destinations[id].name} />
@@ -167,6 +167,10 @@ function SendBar() {
           <SegmentedControlItem value="new" label="新規チャット" />
           <SegmentedControlItem value="recent" label="直近のチャット" />
         </SegmentedControl>
+        {window.chrome?.webview && (
+          <Button label="クリップボードにコピー" icon={<Icon icon={ClipboardDocumentIcon} />}
+            isDisabled={!doc.image} clickAction={copyReviewImage} />
+        )}
         <Button
           label="AIに送る" variant="primary" icon={<Icon icon={PaperAirplaneIcon} />} isDisabled={!doc.image}
           clickAction={() => sendToAI(target, mode === 'new')}

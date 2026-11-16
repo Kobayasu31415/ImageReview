@@ -89,21 +89,34 @@ export async function exportImage({size, type, withNotes}: ExportOptions) {
 }
 
 // ---- AI に送る ----
+async function reviewPng(doc: Doc, height: number, withNotes: boolean) {
+  const canvas = await composeImage(doc, height, {maxEdge: AI_MAX_EDGE, withNotes});
+  return readAsDataURL(await canvasBlob(canvas, 'image/png'));
+}
+
+export async function copyReviewImage() {
+  const {doc, height} = editor.getState();
+  if (!windows || !doc.image) return;
+  try {
+    windows.postMessage({type: 'copy', image: await reviewPng(doc, height, true)});
+  } catch {
+    ui.notify('コピーする画像を作れませんでした。', true);
+  }
+}
+
 export async function sendToAI(target: string, fresh: boolean) {
   const {doc, height} = editor.getState();
   const lines = writtenNotes(doc).map(n => `${n.id}. ${n.text.trim().replace(/\n+/g, '\n   ')}`);
   const prompt = lines.length ? `添付した画像の番号の箇所について、次の修正をお願いします。\n\n${lines.join('\n')}` : '';
-  const png = async (withNotes: boolean) =>
-    readAsDataURL(await canvasBlob(await composeImage(doc, height, {maxEdge: AI_MAX_EDGE, withNotes}), 'image/png'));
   try {
     if (windows) {
-      windows.postMessage({type: 'send', target, fresh, image: await png(lines.length > 0)});
+      windows.postMessage({type: 'send', target, fresh, image: await reviewPng(doc, height, true)});
       return;
     }
     // 指示文を文字として渡せるかはアプリ側が決めるので、渡せない場合に使う「指示文入り」の画像も一緒に渡す。
     native?.postMessage({
       type: 'send', target, fresh, prompt,
-      image: await png(false), imageWithNotes: lines.length ? await png(true) : '',
+      image: await reviewPng(doc, height, false), imageWithNotes: lines.length ? await reviewPng(doc, height, true) : '',
     });
     ui.notify(`${destinations[target]?.name ?? 'AI'}に送りました`);
   } catch {
