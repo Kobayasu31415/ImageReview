@@ -32,7 +32,7 @@ https://github.com/user-attachments/assets/b557cfc5-a264-4f50-9ac3-d81c82523f6a
 
 ### Mac 版
 
-1. [Releases](https://github.com/Kobayasu31415/ImageReview/releases/latest) から `ImageReview-1.1.dmg` をダウンロードして開く
+1. [Releases](https://github.com/Kobayasu31415/ImageReview/releases/latest) から `ImageReview-1.2.dmg` をダウンロードして開く
 2. `ImageReview` を `Applications` フォルダにドラッグする
 3. 初回だけ起動を許可する（Apple の公証を受けていないため、そのままでは警告が出て開けません）
    1. `ImageReview` を開く。警告が出るので「完了」で閉じる
