@@ -128,7 +128,7 @@ function ToolBar() {
       endContent={
         <HStack gap={2} vAlign="center">
           <IconButton
-            label="元に戻す" tooltip="元に戻す（⌘Z）" variant="ghost" icon={<Icon icon={ArrowUturnLeftIcon} />}
+            label="元に戻す" tooltip={navigator.platform.startsWith('Mac') ? '元に戻す（⌘Z）' : '元に戻す（Ctrl+Z）'} variant="ghost" icon={<Icon icon={ArrowUturnLeftIcon} />}
             isDisabled={!canUndo} onClick={() => editor.undo()}
           />
           <Selector

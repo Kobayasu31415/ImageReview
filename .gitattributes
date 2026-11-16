@@ -1,0 +1,3 @@
+# Astryx compares its generated theme module byte for byte.
+web/src/astryx-themes.js text eol=lf
+winapp/build.cmd text eol=crlf
