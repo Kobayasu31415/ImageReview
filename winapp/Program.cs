@@ -1,6 +1,9 @@
 using Microsoft.VisualBasic.ApplicationServices;
 using System.Runtime.InteropServices;
 
+// WindowsFormsApplicationBase は Guid がないと、ビルドごとに異なる MVID で常駐プロセスを識別する。
+[assembly: Guid("5954725a-e622-47ee-9974-0af1086bcfd4")]
+
 namespace ImageReview;
 
 internal static class Program
@@ -34,6 +37,8 @@ internal sealed class TrayHost : Form
     private readonly NotifyIcon tray;
     private readonly ContextMenuStrip menu = new();
     private readonly List<int> registered = [];
+    private readonly Dictionary<int, ToolStripMenuItem> pendingShortcuts = [];
+    private readonly System.Windows.Forms.Timer retryShortcuts = new() { Interval = 3000 };
     private bool selecting;
     private bool quitting;
 
@@ -44,7 +49,6 @@ internal sealed class TrayHost : Form
         menu.Items.Add("エクスプローラーの「プログラムから開く」に登録", null, (_, _) => Explorer.Register());
         menu.Items.Add(new ToolStripSeparator());
         var names = new[] { "画面全体を撮影", "範囲を選択して撮影", "ウィンドウを選択して撮影" };
-        var conflicts = new List<string>();
         for (int i = 0; i < names.Length; i++)
         {
             int id = i + 7;
@@ -54,14 +58,10 @@ internal sealed class TrayHost : Form
                 await Task.Delay(250);
                 CaptureScreen(id);
             });
-            var shortcut = $"Ctrl+Shift+{id}";
-            if (RegisterHotKey(Handle, id, 0x4000 | 0x0002 | 0x0004, (uint)(Keys.D0 + id)))
-            {
-                registered.Add(id);
-                item.ShortcutKeyDisplayString = shortcut;
-            }
-            else conflicts.Add(shortcut);
+            pendingShortcuts.Add(id, item);
         }
+        retryShortcuts.Tick += (_, _) => RegisterAvailableShortcuts();
+        RegisterAvailableShortcuts();
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("ImageReview を終了", null, async (_, _) => await QuitAsync());
         tray = new NotifyIcon { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath),
@@ -70,10 +70,23 @@ internal sealed class TrayHost : Form
         BeginInvoke(() =>
         {
             OpenFiles(paths);
-            if (conflicts.Count > 0)
+            if (pendingShortcuts.Count > 0)
                 tray.ShowBalloonTip(5000, "撮影ショートカットを登録できませんでした",
-                    string.Join("、", conflicts) + " は使用中です。通知領域のメニューからも撮影できます。", ToolTipIcon.Warning);
+                    string.Join("、", pendingShortcuts.Keys.Select(id => $"Ctrl+Shift+{id}"))
+                    + " は使用中です。空くと自動で登録します。", ToolTipIcon.Warning);
         });
+    }
+
+    private void RegisterAvailableShortcuts()
+    {
+        foreach (var (id, item) in pendingShortcuts.ToArray())
+        {
+            if (!RegisterHotKey(Handle, id, 0x4000 | 0x0002 | 0x0004, (uint)(Keys.D0 + id))) continue;
+            registered.Add(id);
+            item.ShortcutKeyDisplayString = $"Ctrl+Shift+{id}";
+            pendingShortcuts.Remove(id);
+        }
+        retryShortcuts.Enabled = pendingShortcuts.Count > 0;
     }
 
     protected override void SetVisibleCore(bool value) => base.SetVisibleCore(false);
@@ -136,6 +149,7 @@ internal sealed class TrayHost : Form
     {
         if (disposing)
         {
+            retryShortcuts.Dispose();
             if (IsHandleCreated) foreach (int id in registered) UnregisterHotKey(Handle, id);
             tray.Dispose();
             menu.Dispose();
