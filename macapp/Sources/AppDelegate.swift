@@ -404,10 +404,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 item("取り消す", Selector(("undo:")), key: "z"),
                 redo,
                 .separator(),
-                item("カット", #selector(NSText.cut), key: "x"),
-                item("コピー", #selector(NSText.copy), key: "c"),
-                item("ペースト", #selector(NSText.paste), key: "v"),
-                item("すべてを選択", #selector(NSText.selectAll), key: "a"),
+                // 引数つきの形（copy(_:) など）で書くこと。#selector(NSText.copy) と書くと、編集の「コピー」ではなく
+                // NSObject の copy()（オブジェクトの複製）を指してしまい、⌘C を押した瞬間にアプリが異常終了する。
+                item("カット", #selector(NSText.cut(_:)), key: "x"),
+                item("コピー", #selector(NSText.copy(_:)), key: "c"),
+                item("ペースト", #selector(NSText.paste(_:)), key: "v"),
+                item("すべてを選択", #selector(NSText.selectAll(_:)), key: "a"),
             ]),
             submenu("ウインドウ", [
                 item("しまう", #selector(NSWindow.performMiniaturize), key: "m"),

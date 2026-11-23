@@ -114,6 +114,18 @@ extension AppDelegate {
                     operation.runModal(for: window.window, delegate: nil, didRun: nil, contextInfo: nil)
                     try? await Task.sleep(nanoseconds: 4_000_000_000)
                 }
+                if env["IRN_TEST_EDITMENU"] != nil {   // 編集メニューの各項目が指す処理名と、⌘C 相当の実行で落ちないこと
+                    let edit = NSApp.mainMenu?.items.compactMap(\.submenu).first { $0.items.contains { $0.keyEquivalent == "c" } }
+                    for item in edit?.items ?? [] where item.action != nil {
+                        log += "edit menu: \(item.title) ⌘\(item.keyEquivalent) → \(NSStringFromSelector(item.action!))\n"
+                    }
+                    if let copy = edit?.items.first(where: { $0.keyEquivalent == "c" }), let action = copy.action {
+                        self.windows.first?.window.makeKeyAndOrderFront(nil)
+                        if let front = self.windows.first { front.window.makeFirstResponder(front.webView) }   // 実際の利用時と同じく、編集画面が受け取る状態にする
+                        let handled = NSApp.sendAction(action, to: nil, from: copy)
+                        log += "performed copy: handled=\(handled)\n"
+                    }
+                }
                 if let hold = Double(env["IRN_TEST_HOLD"] ?? "") {   // 終了せずに待つ（常駐中のメモリを外から測るため）
                     try? log.write(to: dir.appendingPathComponent("result.txt"), atomically: true, encoding: .utf8)
                     try? await Task.sleep(nanoseconds: UInt64(hold * 1_000_000_000))
