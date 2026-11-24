@@ -12,10 +12,25 @@ internal static class Program
     private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
-        // 後から起動したプロセスの作業ディレクトリを基準に解決する。
-        var paths = args.Select(Path.GetFullPath).ToArray();
-        new DesktopApp().Run(paths);
+        new DesktopApp().Run(Cli.Normalize(args));
     }
+}
+
+internal static class Cli
+{
+    // Windows 起動時は、編集ウィンドウを開かずに常駐だけする。
+    public const string Background = "--background";
+
+    // ファイルは、後から起動したプロセスの作業ディレクトリを基準に解決する。
+    public static string[] Normalize(IEnumerable<string> args) =>
+        args.Select(arg => IsFlag(arg) ? arg : Path.GetFullPath(arg)).ToArray();
+
+    public static string[] Paths(IEnumerable<string> args) => args.Where(arg => !IsFlag(arg)).ToArray();
+
+    public static bool IsBackground(IEnumerable<string> args) =>
+        args.Any(arg => string.Equals(arg, Background, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsFlag(string arg) => arg.StartsWith("--", StringComparison.Ordinal);
 }
 
 internal sealed class DesktopApp : WindowsFormsApplicationBase
@@ -27,7 +42,7 @@ internal sealed class DesktopApp : WindowsFormsApplicationBase
     protected override void OnStartupNextInstance(StartupNextInstanceEventArgs e)
     {
         e.BringToForeground = false;
-        ((TrayHost)MainForm!).OpenFiles(e.CommandLine.ToArray());
+        ((TrayHost)MainForm!).OpenFiles(Cli.Paths(e.CommandLine));
         base.OnStartupNextInstance(e);
     }
 }
@@ -42,11 +57,20 @@ internal sealed class TrayHost : Form
     private bool selecting;
     private bool quitting;
 
-    public TrayHost(string[] paths)
+    public TrayHost(string[] args)
     {
+        var paths = Cli.Paths(args);
+        bool background = Cli.IsBackground(args);
+        Startup.RefreshPath();
         ShowInTaskbar = false;
         menu.Items.Add("新規ウィンドウ", null, (_, _) => OpenReview(null));
         menu.Items.Add("エクスプローラーの「プログラムから開く」に登録", null, (_, _) => Explorer.Register());
+        var startup = new ToolStripMenuItem("Windows 起動時に開く") { Checked = Startup.IsEnabled() };
+        startup.Click += (_, _) =>
+        {
+            if (Startup.SetEnabled(!startup.Checked)) startup.Checked = !startup.Checked;
+        };
+        menu.Items.Add(startup);
         menu.Items.Add(new ToolStripSeparator());
         var names = new[] { "画面全体を撮影", "範囲を選択して撮影", "ウィンドウを選択して撮影" };
         for (int i = 0; i < names.Length; i++)
@@ -69,7 +93,7 @@ internal sealed class TrayHost : Form
         tray.DoubleClick += (_, _) => OpenReview(null);
         BeginInvoke(() =>
         {
-            OpenFiles(paths);
+            if (!background || paths.Length > 0) OpenFiles(paths);
             if (pendingShortcuts.Count > 0)
                 tray.ShowBalloonTip(5000, "撮影ショートカットを登録できませんでした",
                     string.Join("、", pendingShortcuts.Keys.Select(id => $"Ctrl+Shift+{id}"))
