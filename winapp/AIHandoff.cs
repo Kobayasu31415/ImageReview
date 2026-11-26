@@ -77,6 +77,20 @@ internal static class AIHandoff
         using var png = new MemoryStream(Convert.FromBase64String(image[prefix.Length..]));
         using var bitmap = new Bitmap(png);
         png.Position = 0;
+        Copy(bitmap, png);
+    }
+
+    // 撮ったままの画像を、編集を待たずにクリップボードへ入れる。
+    internal static void CopyImage(Bitmap bitmap)
+    {
+        using var png = new MemoryStream();
+        bitmap.Save(png, System.Drawing.Imaging.ImageFormat.Png);
+        png.Position = 0;
+        Copy(bitmap, png);
+    }
+
+    private static void Copy(Bitmap bitmap, MemoryStream png)
+    {
         var data = new DataObject();
         data.SetData("PNG", false, png);
         data.SetImage(bitmap);

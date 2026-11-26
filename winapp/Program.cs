@@ -1,4 +1,5 @@
 using Microsoft.VisualBasic.ApplicationServices;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 // WindowsFormsApplicationBase は Guid がないと、ビルドごとに異なる MVID で常駐プロセスを識別する。
@@ -142,7 +143,11 @@ internal sealed class TrayHost : Form
         try
         {
             using var image = ScreenCapture.Take(id);
-            if (image != null) OpenReview(ReviewInput.FromCapture(image));
+            if (image == null) return;
+            // 撮った直後に貼り付けられるようにする。書き込んだ内容は「クリップボードにコピー」で入れ直す。
+            try { AIHandoff.CopyImage(image); }
+            catch (Exception ex) { Debug.WriteLine($"クリップボードに入れられませんでした: {ex.Message}"); }
+            OpenReview(ReviewInput.FromCapture(image));
         }
         catch (Exception ex) { MessageBox.Show($"撮影できませんでした。\n{ex.Message}", "ImageReview"); }
         finally { selecting = false; }
