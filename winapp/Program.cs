@@ -42,7 +42,10 @@ internal sealed class DesktopApp : WindowsFormsApplicationBase
     protected override void OnStartupNextInstance(StartupNextInstanceEventArgs e)
     {
         e.BringToForeground = false;
-        ((TrayHost)MainForm!).OpenFiles(Cli.Paths(e.CommandLine));
+        var paths = Cli.Paths(e.CommandLine);
+        // サインイン時の起動と重なっても、常駐済みならウィンドウを増やさない。
+        if (paths.Length > 0 || !Cli.IsBackground(e.CommandLine))
+            ((TrayHost)MainForm!).OpenFiles(paths);
         base.OnStartupNextInstance(e);
     }
 }
@@ -61,7 +64,7 @@ internal sealed class TrayHost : Form
     {
         var paths = Cli.Paths(args);
         bool background = Cli.IsBackground(args);
-        Startup.RefreshPath();
+        Startup.Sync();
         ShowInTaskbar = false;
         menu.Items.Add("新規ウィンドウ", null, (_, _) => OpenReview(null));
         menu.Items.Add("エクスプローラーの「プログラムから開く」に登録", null, (_, _) => Explorer.Register());
