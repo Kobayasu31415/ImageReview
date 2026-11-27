@@ -264,6 +264,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             DispatchQueue.main.async {
                 self.capturing = false
                 if FileManager.default.fileExists(atPath: file.path) {
+                    // 撮った直後に貼り付けられるようにする。
+                    // 番号タグや手書きを足した画像は「クリップボードにコピー」で入れ直す。
+                    if let png = try? Data(contentsOf: file) { Paster.copy(image: png) }
                     self.open([file], name: name, removeWhenDone: true)
                 }
             }
